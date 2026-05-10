@@ -96,10 +96,26 @@ def init_db():
             )
         conn.execute("""
             CREATE TABLE IF NOT EXISTS guild_bindings (
-                guild_id   INTEGER PRIMARY KEY,
-                channel_id INTEGER NOT NULL
+                guild_id   INTEGER NOT NULL,
+                channel_id INTEGER NOT NULL,
+                PRIMARY KEY (guild_id, channel_id)
             )
         """)
+        # Migrate old single-channel-per-guild schema if present.
+        old = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='guild_bindings'"
+        ).fetchone()
+        if old and "PRIMARY KEY (guild_id, channel_id)" not in old["sql"]:
+            conn.execute("ALTER TABLE guild_bindings RENAME TO guild_bindings_old")
+            conn.execute("""
+                CREATE TABLE guild_bindings (
+                    guild_id   INTEGER NOT NULL,
+                    channel_id INTEGER NOT NULL,
+                    PRIMARY KEY (guild_id, channel_id)
+                )
+            """)
+            conn.execute("INSERT OR IGNORE INTO guild_bindings SELECT guild_id, channel_id FROM guild_bindings_old")
+            conn.execute("DROP TABLE guild_bindings_old")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS migrated_files (
                 path       TEXT PRIMARY KEY,
@@ -269,39 +285,35 @@ def remove_vectors_by_indices(guild_id, channel_id, indices):
     return True
 
 
-def get_bind_channel(guild_id):
+def get_bound_channels(guild_id):
     with db() as conn:
-        row = conn.execute(
+        rows = conn.execute(
             "SELECT channel_id FROM guild_bindings WHERE guild_id = ?",
             (guild_id,),
-        ).fetchone()
-    return row["channel_id"] if row else None
+        ).fetchall()
+    return {row["channel_id"] for row in rows}
 
 
 def set_bind_channel(guild_id, channel_id):
     with db() as conn:
         conn.execute(
-            "INSERT INTO guild_bindings (guild_id, channel_id) VALUES (?, ?) "
-            "ON CONFLICT(guild_id) DO UPDATE SET channel_id = excluded.channel_id",
+            "INSERT OR IGNORE INTO guild_bindings (guild_id, channel_id) VALUES (?, ?)",
             (guild_id, channel_id),
         )
 
 
 async def reject_if_not_bound(interaction: discord.Interaction) -> bool:
-    """Return True (and send a rejection message) if this command should be blocked.
-    Commands are blocked unless an admin has bound a channel via /bind and the
-    command is being used in that channel."""
-    bound = get_bind_channel(interaction.guild.id)
-    if bound is None:
+    bound = get_bound_channels(interaction.guild.id)
+    if not bound:
         await interaction.response.send_message(
             "No channel is bound for this server. An administrator must run `/bind` "
             "in the channel where this bot should operate before any commands can be used.",
             ephemeral=True,
         )
         return True
-    if interaction.channel.id != bound:
+    if interaction.channel.id not in bound:
         await interaction.response.send_message(
-            "This command can only be used in the bound channel.",
+            "This command can only be used in a bound channel.",
             ephemeral=True,
         )
         return True
