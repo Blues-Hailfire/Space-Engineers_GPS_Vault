@@ -4,3 +4,8 @@
 DiscordToken.txt
 *.db
 gps.db
+plugin/bin/
+plugin/obj/
+__pycache__/
+oauth_config.json
+session_secret.key

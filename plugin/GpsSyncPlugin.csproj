@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Targets the "Legacy" Pulsar executable (Space Engineers 1 on .NET Framework).
+    If you're running Pulsar's "Interim" (.NET 10 compat) or "Modern" (SE2) executable
+    instead, change TargetFramework to match that executable's runtime before building.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>GpsSyncPlugin</AssemblyName>
+    <RootNamespace>GpsSyncPlugin</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+
+    <!--
+      Point this at your Space Engineers Bin64 folder (contains Sandbox.Common.dll,
+      VRage.dll, VRage.Game.dll, VRage.Math.dll etc.), e.g. via:
+        dotnet build -p:GameBinPath="C:\Program Files (x86)\Steam\steamapps\common\SpaceEngineers\Bin64"
+      or set the SE_BIN_PATH environment variable.
+    -->
+    <GameBinPath Condition="'$(GameBinPath)' == ''">$(SE_BIN_PATH)</GameBinPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <!-- Game-provided assemblies: not vendored in this repo, resolved from GameBinPath. -->
+  <ItemGroup Condition="'$(GameBinPath)' != ''">
+    <Reference Include="VRage">
+      <HintPath>$(GameBinPath)\VRage.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage.Game">
+      <HintPath>$(GameBinPath)\VRage.Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage.Math">
+      <HintPath>$(GameBinPath)\VRage.Math.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Sandbox.Common">
+      <HintPath>$(GameBinPath)\Sandbox.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Sandbox.Game">
+      <HintPath>$(GameBinPath)\Sandbox.Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Sandbox.Graphics">
+      <HintPath>$(GameBinPath)\Sandbox.Graphics.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage.Input">
+      <HintPath>$(GameBinPath)\VRage.Input.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage.Library">
+      <HintPath>$(GameBinPath)\VRage.Library.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CheckGameBinPath" BeforeTargets="Build" Condition="'$(GameBinPath)' == ''">
+    <Error Text="GameBinPath is not set. Pass -p:GameBinPath=&quot;&lt;path to SE Bin64&gt;&quot; or set the SE_BIN_PATH environment variable." />
+  </Target>
+
+</Project>

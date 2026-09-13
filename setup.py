@@ -94,12 +94,31 @@ def init_db():
             conn.execute(
                 "ALTER TABLE gps_points ADD COLUMN color TEXT NOT NULL DEFAULT '#FFFFFFFF'"
             )
+        # Migrate legacy guild_bindings (guild_id PRIMARY KEY, one channel per guild)
+        # to the new schema (channel_id PRIMARY KEY, multiple bound channels per guild).
+        old_pk = conn.execute("""
+            SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'guild_bindings'
+            AND sql LIKE '%guild_id%PRIMARY KEY%'
+        """).fetchone()
+        if old_pk:
+            conn.execute("ALTER TABLE guild_bindings RENAME TO guild_bindings_old")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS guild_bindings (
-                guild_id   INTEGER PRIMARY KEY,
-                channel_id INTEGER NOT NULL
+                channel_id INTEGER PRIMARY KEY,
+                guild_id   INTEGER NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_guild_bindings_guild
+            ON guild_bindings (guild_id)
+        """)
+        if old_pk:
+            conn.execute("""
+                INSERT OR IGNORE INTO guild_bindings (channel_id, guild_id)
+                SELECT channel_id, guild_id FROM guild_bindings_old
+            """)
+            conn.execute("DROP TABLE guild_bindings_old")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS migrated_files (
                 path       TEXT PRIMARY KEY,
@@ -269,39 +288,41 @@ def remove_vectors_by_indices(guild_id, channel_id, indices):
     return True
 
 
-def get_bind_channel(guild_id):
+def is_channel_bound(guild_id, channel_id):
     with db() as conn:
         row = conn.execute(
-            "SELECT channel_id FROM guild_bindings WHERE guild_id = ?",
-            (guild_id,),
+            "SELECT 1 FROM guild_bindings WHERE guild_id = ? AND channel_id = ?",
+            (guild_id, channel_id),
         ).fetchone()
-    return row["channel_id"] if row else None
+    return row is not None
 
 
 def set_bind_channel(guild_id, channel_id):
     with db() as conn:
         conn.execute(
-            "INSERT INTO guild_bindings (guild_id, channel_id) VALUES (?, ?) "
-            "ON CONFLICT(guild_id) DO UPDATE SET channel_id = excluded.channel_id",
+            "INSERT INTO guild_bindings (channel_id, guild_id) VALUES (?, ?) "
+            "ON CONFLICT(channel_id) DO UPDATE SET guild_id = excluded.guild_id",
+            (channel_id, guild_id),
+        )
+
+
+def remove_bind_channel(guild_id, channel_id):
+    with db() as conn:
+        cur = conn.execute(
+            "DELETE FROM guild_bindings WHERE guild_id = ? AND channel_id = ?",
             (guild_id, channel_id),
         )
+    return cur.rowcount > 0
 
 
 async def reject_if_not_bound(interaction: discord.Interaction) -> bool:
     """Return True (and send a rejection message) if this command should be blocked.
-    Commands are blocked unless an admin has bound a channel via /bind and the
-    command is being used in that channel."""
-    bound = get_bind_channel(interaction.guild.id)
-    if bound is None:
+    Commands are blocked unless an admin has bound this specific channel via /bind.
+    A server can have multiple bound channels, each with its own independent GPS list."""
+    if not is_channel_bound(interaction.guild.id, interaction.channel.id):
         await interaction.response.send_message(
-            "No channel is bound for this server. An administrator must run `/bind` "
-            "in the channel where this bot should operate before any commands can be used.",
-            ephemeral=True,
-        )
-        return True
-    if interaction.channel.id != bound:
-        await interaction.response.send_message(
-            "This command can only be used in the bound channel.",
+            "This channel is not bound. An administrator must run `/bind` "
+            "in this channel before any commands can be used here.",
             ephemeral=True,
         )
         return True
@@ -427,11 +448,20 @@ async def add_gps(interaction: discord.Interaction, gps_string: str):
     await interaction.response.send_message("Succesfully stashed all identified GPS Points.")
 
 
-@bot.tree.command(name="bind", description="Bind the bot to respond only in this channel.")
+@bot.tree.command(name="bind", description="Bind the bot to respond in this channel, with its own independent GPS list.")
 @discord.app_commands.default_permissions(administrator=True)
 async def bind(interaction: discord.Interaction):
     set_bind_channel(interaction.guild.id, interaction.channel.id)
     await interaction.response.send_message(f"Bot is now bound to this channel: {interaction.channel.name}")
+
+
+@bot.tree.command(name="unbind", description="Unbind the bot from this channel.")
+@discord.app_commands.default_permissions(administrator=True)
+async def unbind(interaction: discord.Interaction):
+    if remove_bind_channel(interaction.guild.id, interaction.channel.id):
+        await interaction.response.send_message(f"Bot is no longer bound to this channel: {interaction.channel.name}")
+    else:
+        await interaction.response.send_message("This channel was not bound.", ephemeral=True)
 
 
 def argb_to_css_hex(color: str) -> str:

@@ -270,16 +270,25 @@
     cursor: pointer;
     transition: background 0.08s;
     position: relative;
+    user-select: none; /* Shift-click for range-select must not select list text */
   }
   .point-item:hover { background: rgba(255,255,255,0.07); }
-  .point-item.active { background: #ffffff; }
-  .point-item.active .pt-name { color: #000000; }
-  .point-item.active .pt-coords { color: rgba(0,0,0,0.55); }
+  .point-item.active,
+  .point-item.multi-selected { background: #ffffff; }
+  .point-item.active .pt-name,
+  .point-item.multi-selected .pt-name { color: #000000; }
+  .point-item.active .pt-coords,
+  .point-item.multi-selected .pt-coords { color: rgba(0,0,0,0.55); }
   .point-item.active .pt-vis,
-  .point-item.active .pt-focus { color: rgba(0,0,0,0.5); }
+  .point-item.active .pt-focus,
+  .point-item.multi-selected .pt-vis,
+  .point-item.multi-selected .pt-focus { color: rgba(0,0,0,0.5); }
   .point-item.active .pt-vis:hover,
-  .point-item.active .pt-focus:hover { color: #000000; }
-  .point-item.active::before { display: none; }
+  .point-item.active .pt-focus:hover,
+  .point-item.multi-selected .pt-vis:hover,
+  .point-item.multi-selected .pt-focus:hover { color: #000000; }
+  .point-item.active::before,
+  .point-item.multi-selected::before { display: none; }
   .point-item.hidden-pt { opacity: 0.3; }
   .point-item.no-match { display: none; }
 
@@ -316,6 +325,60 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-family: var(--mono);
+  }
+
+  .pt-lastseen {
+    font-size: 8px;
+    color: rgba(120,200,140,0.55);
+    margin-top: 1px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--mono);
+  }
+  .pt-lastseen.stale { color: rgba(220,120,90,0.65); }
+
+  /* ── PLANETS (sidebar) ───────────────────────────────────── */
+  #planet-list:empty { display: none; }
+  #planet-list {
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .planet-list-label {
+    font-size: 8px;
+    letter-spacing: 0.15em;
+    color: rgba(255,153,0,0.7);
+    padding: 6px 10px 2px;
+  }
+  .planet-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background 0.08s;
+    user-select: none;
+  }
+  .planet-item:hover { background: rgba(255,153,0,0.1); }
+  .planet-icon { flex-shrink: 0; }
+  .planet-info { flex: 1; min-width: 0; }
+  .planet-item .pt-focus:hover { color: #ff9900; }
+  .planet-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffcc80;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+  }
+  .planet-radius {
+    font-size: 8px;
+    color: rgba(255,153,0,0.5);
+    margin-top: 2px;
+    letter-spacing: 0.03em;
     font-family: var(--mono);
   }
 
@@ -539,6 +602,157 @@
   }
   .detail-key { color: rgba(255,255,255,0.35); width: 24px; }
   .detail-val { color: var(--cyan); }
+
+  /* ── EDIT MODAL ─────────────────────────────────────────────
+     Matches the rest of the console: black panels, white brut border,
+     cut corners, Orbitron/Share Tech Mono, invert-on-hover buttons. */
+  #edit-modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #edit-modal-backdrop.open { display: flex; }
+  #edit-modal {
+    background: var(--panel);
+    border: var(--brut-border);
+    padding: 18px;
+    width: 280px;
+    font-family: var(--mono);
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+  #edit-modal-title {
+    font-family: var(--head);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(255,255,255,0.25);
+    margin-bottom: 14px;
+  }
+  .edit-modal-label {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  #edit-name-input {
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 7px 8px;
+    background: #000000;
+    color: #ffffff;
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  #edit-name-input:focus { outline: none; border-color: #ffffff; }
+
+  /* Inline Hue/Saturation/Value bars, matching Space Engineers' own GPS
+     color editor axes — no native OS/browser color-picker popup. */
+  #edit-color-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  #edit-color-preview {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: #ffffff;
+  }
+  #edit-color-sliders { flex: 1; min-width: 0; }
+  .color-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .color-slider-row + .color-slider-row { margin-top: 5px; }
+  .color-slider-label {
+    width: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.5);
+  }
+  .color-slider-val {
+    width: 28px;
+    text-align: right;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: rgba(255,255,255,0.5);
+  }
+  .color-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 10px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.6);
+    outline: none;
+  }
+  .color-slider::-webkit-slider-runnable-track {
+    background: transparent;
+    height: 10px;
+  }
+  .color-slider::-moz-range-track {
+    background: transparent;
+    height: 10px;
+  }
+  .color-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 16px;
+    background: #ffffff;
+    border: 1px solid #000000;
+    cursor: pointer;
+    margin-top: -1px;
+  }
+  .color-slider::-moz-range-thumb {
+    width: 10px;
+    height: 16px;
+    background: #ffffff;
+    border: 1px solid #000000;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  #edit-modal-error {
+    display: none;
+    color: #ffffff;
+    background: rgba(255,255,255,0.1);
+    border-left: 2px solid #ffffff;
+    padding: 5px 7px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    margin: -6px 0 10px;
+  }
+  #edit-modal-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .edit-modal-btn {
+    font-family: var(--mono);
+    background: #000000;
+    color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.35);
+    padding: 6px 16px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.08s;
+  }
+  .edit-modal-btn:hover,
+  .edit-modal-btn.primary { background: #ffffff; border-color: #ffffff; color: #000000; }
+  .edit-modal-btn.primary:hover { background: rgba(255,255,255,0.8); }
 
   /* ── CLOCK ───────────────────────────────────────────────── */
   #clock {
@@ -770,6 +984,8 @@
       <div class="sys-sub">{{TITLE}} &nbsp;·&nbsp; <span id="hdr-count">{{POINT_COUNT}}</span> STATIONS INDEXED</div>
     </div>
 
+    <div id="planet-list"></div>
+
     <div id="search-wrap">
       <span id="search-icon">⌕</span>
       <input id="search-input" type="text" placeholder="SEARCH STATIONS..." autocomplete="off" spellcheck="false" />
@@ -783,10 +999,10 @@
     </div>
 
     <div id="bulk-bar">
-      <span class="bulk-label">BATCH &nbsp;<span class="blink">_</span></span>
+      <span class="bulk-label">ACTIVE &nbsp;<span id="active-player-count">0</span></span>
+      <span class="bulk-label" style="color:#ff5050">THREATS &nbsp;<span id="active-hostile-count">0</span></span>
       <button class="bulk-btn" id="btn-show-all">SHOW ALL</button>
       <button class="bulk-btn" id="btn-hide-all">HIDE ALL</button>
-      <button class="bulk-btn" id="btn-hide-filtered">HIDE VIS</button>
     </div>
 
     <div id="point-list"></div>
@@ -907,6 +1123,43 @@
       <div class="detail-row"><span class="detail-key">Y</span><span class="detail-val" id="detail-y">—</span></div>
       <div class="detail-row"><span class="detail-key">Z</span><span class="detail-val" id="detail-z">—</span></div>
       <div class="detail-row" style="margin-top:4px"><span class="detail-key" style="color:#999">TAG</span><span class="detail-val" style="color:#c8c8c8" id="detail-tag">—</span></div>
+      <div class="detail-row" id="detail-speed-row" style="display:none"><span class="detail-key" style="color:#999">SPEED</span><span class="detail-val" style="color:#c8c8c8" id="detail-speed">—</span></div>
+      <div class="detail-row" id="detail-lastseen-row" style="display:none"><span class="detail-key" style="color:#999">LAST HEARD</span><span class="detail-val" style="color:#c8c8c8" id="detail-lastseen">—</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit GPS point modal (live view only) -->
+<div id="edit-modal-backdrop">
+  <div id="edit-modal">
+    <div id="edit-modal-title">EDIT GPS POINT</div>
+    <label class="edit-modal-label" for="edit-name-input">Name</label>
+    <input id="edit-name-input" type="text" maxlength="32">
+    <label class="edit-modal-label">Color</label>
+    <div id="edit-color-picker">
+      <div id="edit-color-preview"></div>
+      <div id="edit-color-sliders">
+        <div class="color-slider-row">
+          <span class="color-slider-label">H</span>
+          <input id="edit-color-h" class="color-slider" type="range" min="0" max="360" step="1">
+          <span class="color-slider-val" id="edit-color-h-val">0</span>
+        </div>
+        <div class="color-slider-row">
+          <span class="color-slider-label">S</span>
+          <input id="edit-color-s" class="color-slider" type="range" min="0" max="100" step="1">
+          <span class="color-slider-val" id="edit-color-s-val">0</span>
+        </div>
+        <div class="color-slider-row">
+          <span class="color-slider-label">V</span>
+          <input id="edit-color-v" class="color-slider" type="range" min="0" max="100" step="1">
+          <span class="color-slider-val" id="edit-color-v-val">0</span>
+        </div>
+      </div>
+    </div>
+    <div id="edit-modal-error"></div>
+    <div id="edit-modal-buttons">
+      <button id="edit-cancel-btn" class="edit-modal-btn">Cancel</button>
+      <button id="edit-save-btn" class="edit-modal-btn primary">Save</button>
     </div>
   </div>
 </div>
@@ -926,6 +1179,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // ── DATA ──────────────────────────────────────────────────────────────────
 const POINTS = {{POINTS_JSON}};
+// Non-null only for the live-served /map/frame view — enables polling for
+// real-time movement. Always null on the standalone downloadable file.
+const LIVE = {{LIVE_CONFIG_JSON}};
+const PLANETS = {{PLANETS_JSON}}; // [{name, x, y, z, radius}, ...] — synced from the plugin
+
+// Name prefixes the server uses to mark non-vault, trail-tracked markers —
+// must match LIVE_POSITION_PREFIX / HOSTILE_SIGNAL_PREFIX in sync_api.py.
+const PLAYER_MARKER_PREFIX = '◆ ';
+const HOSTILE_MARKER_PREFIX = '⚠ ';
 
 // ── TAG EXTRACTION ────────────────────────────────────────────────────────
 // Known suffix tags (network/group identifiers) — edit to match your server
@@ -960,7 +1222,17 @@ const pointData = POINTS.map((p, i) => ({
   tag: extractTag(p.name),
   type: extractType(p.name),
   hidden: false,
+  removedByServer: false,
   id: i,
+  trail: p.trail || [],
+  velocity: p.velocity || null,
+  prediction: p.prediction || [],
+  lastSeenAt: p.last_seen_at || null,
+  // Dead-reckoning anchor: live players' on-screen position is extrapolated
+  // from this each frame (see updateLiveDeadReckoning), not just snapped at
+  // each ~3s poll — keeps the map feeling live in between updates.
+  basePos: { x: p.x, y: p.y, z: p.z },
+  lastUpdateAt: Date.now(),
 }));
 
 // ── SCENE SETUP ──────────────────────────────────────────────────────────
@@ -998,14 +1270,23 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 
+// A live-position marker ("trail" key present) with no velocity is stale —
+// its last-known position could be from long ago and far from where the
+// player actually is now. Letting one of these dominate the initial
+// camera fit can zoom the view out so far that every other (real, current)
+// point shrinks to an imperceptible dot — effectively "nothing renders".
+// Excluded here only from the initial auto-frame; still rendered normally.
+const framingCandidates = POINTS.filter(p => !('trail' in p) || p.velocity);
+const framingPoints = framingCandidates.length ? framingCandidates : POINTS;
+
 let cx = 0, cy = 0, cz = 0;
-if (POINTS.length) {
-  const xs = POINTS.map(p => p.x), ys = POINTS.map(p => p.y), zs = POINTS.map(p => p.z);
+if (framingPoints.length) {
+  const xs = framingPoints.map(p => p.x), ys = framingPoints.map(p => p.y), zs = framingPoints.map(p => p.z);
   cx = (Math.min(...xs) + Math.max(...xs)) / 2;
   cy = (Math.min(...ys) + Math.max(...ys)) / 2;
   cz = (Math.min(...zs) + Math.max(...zs)) / 2;
 }
-const span = Math.max(1, ...POINTS.map(p => Math.hypot(p.x - cx, p.y - cy, p.z - cz)));
+const span = Math.max(1, ...framingPoints.map(p => Math.hypot(p.x - cx, p.y - cy, p.z - cz)));
 
 camera.position.set(cx + span * 1.5, cy + span * 1.5, cz + span * 1.5);
 controls.target.set(cx, cy, cz);
@@ -1115,14 +1396,13 @@ const glows = [];
 // Shared sphere geometry (unit size — we scale via mesh.scale)
 const unitSphereGeom = new THREE.SphereGeometry(1, 14, 10);
 
-for (const p of pointData) {
+function createPointVisual(p) {
   const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(p.color) });
   const m = new THREE.Mesh(unitSphereGeom, mat);
   m.position.set(p.x, p.y, p.z);
   m.scale.setScalar(BASE_POINT_SIZE);
   m.userData = p;
   scene.add(m);
-  meshes.push(m);
 
   const glowMat = new THREE.SpriteMaterial({
     map: glowTex,
@@ -1136,7 +1416,160 @@ for (const p of pointData) {
   sprite.position.set(p.x, p.y, p.z);
   sprite.scale.set(BASE_POINT_SIZE * 8, BASE_POINT_SIZE * 8, 1);
   scene.add(sprite);
-  glows.push(sprite);
+
+  return { mesh: m, glow: sprite };
+}
+
+for (const p of pointData) {
+  const { mesh, glow } = createPointVisual(p);
+  meshes.push(mesh);
+  glows.push(glow);
+}
+
+// ── PLANETS ────────────────────────────────────────────────────────────────
+// Real position + radius synced from the plugin (see GameStateReader.
+// ReadPlanets — full-trust plugins can read the concrete MyPlanet class
+// directly, unlike restricted PB scripts). Planets are effectively static,
+// so these are just built once — no per-frame updates like the live markers.
+function makePlanetLabelSprite(text, worldSize) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.font = '600 32px system-ui, sans-serif';
+  ctx.fillStyle = '#ffcc80'; // matches the orange sidebar icon/planet-name color
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = 6;
+  ctx.fillText(text, 128, 32);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(worldSize, worldSize * 0.25, 1);
+  return sprite;
+}
+
+// Exact same orange as the sidebar's hollow-hexagon planet icon, so the two
+// read as "the same kind of thing" at a glance. A wireframe only (no solid
+// fill) — distinct from every other marker on the map (solid hexagon = GPS
+// point, dashed line = predicted path, fading line = trail) just by being a
+// wireframe sphere at true world scale.
+const PLANET_COLOR = 0xff9900;
+
+for (const planet of PLANETS) {
+  const wireGeom = new THREE.SphereGeometry(planet.radius, 20, 14);
+  const wireMat = new THREE.MeshBasicMaterial({
+    color: PLANET_COLOR,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  const wireMesh = new THREE.Mesh(wireGeom, wireMat);
+  wireMesh.position.set(planet.x, planet.y, planet.z);
+  scene.add(wireMesh);
+
+  const label = makePlanetLabelSprite(planet.name, planet.radius * 0.6);
+  label.position.set(planet.x, planet.y + planet.radius * 1.15, planet.z);
+  scene.add(label);
+}
+
+// ── MOVEMENT TRAILS ───────────────────────────────────────────────────────
+// A trail is a fading polyline through a live player's recent positions
+// (up to the server's retention window). Vertex colors fade from the
+// background toward the point's own color so recent history reads brighter.
+const trailLines = [];
+
+function buildTrailLine(p) {
+  if (!p.trail || p.trail.length < 2) return null;
+
+  const positions = new Float32Array(p.trail.length * 3);
+  const colors = new Float32Array(p.trail.length * 3);
+  const baseColor = new THREE.Color(p.color);
+  const bg = new THREE.Color(0x050505);
+
+  for (let i = 0; i < p.trail.length; i++) {
+    const [x, y, z] = p.trail[i];
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+
+    const t = i / (p.trail.length - 1); // 0 = oldest, 1 = most recent
+    const c = bg.clone().lerp(baseColor, 0.15 + 0.85 * t);
+    colors[i * 3] = c.r;
+    colors[i * 3 + 1] = c.g;
+    colors[i * 3 + 2] = c.b;
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85 });
+  const line = new THREE.Line(geom, mat);
+  scene.add(line);
+  return line;
+}
+
+function updateTrailLine(idx) {
+  if (trailLines[idx]) {
+    scene.remove(trailLines[idx]);
+    trailLines[idx].geometry.dispose();
+    trailLines[idx].material.dispose();
+    trailLines[idx] = null;
+  }
+  trailLines[idx] = buildTrailLine(pointData[idx]);
+}
+
+for (let i = 0; i < pointData.length; i++) {
+  trailLines.push(buildTrailLine(pointData[i]));
+}
+
+// ── MOVEMENT PREDICTION ───────────────────────────────────────────────────
+// A dashed line extrapolated server-side from the player's last observed
+// velocity + acceleration (basic kinematics) — a short-horizon "where
+// they're likely headed" forecast, visually distinct from the solid trail.
+const predictionLines = [];
+const DASH_SIZE = Math.max(span * 0.01, 0.5);
+
+function buildPredictionLine(p) {
+  if (!p.prediction || p.prediction.length < 2) return null;
+
+  const vertices = [[p.x, p.y, p.z], ...p.prediction];
+  const positions = new Float32Array(vertices.length * 3);
+  for (let i = 0; i < vertices.length; i++) {
+    positions[i * 3] = vertices[i][0];
+    positions[i * 3 + 1] = vertices[i][1];
+    positions[i * 3 + 2] = vertices[i][2];
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineDashedMaterial({
+    color: new THREE.Color(p.color),
+    dashSize: DASH_SIZE,
+    gapSize: DASH_SIZE * 0.6,
+    transparent: true,
+    opacity: 0.55,
+  });
+  const line = new THREE.Line(geom, mat);
+  line.computeLineDistances(); // required for dashes to render
+  scene.add(line);
+  return line;
+}
+
+function updatePredictionLine(idx) {
+  if (predictionLines[idx]) {
+    scene.remove(predictionLines[idx]);
+    predictionLines[idx].geometry.dispose();
+    predictionLines[idx].material.dispose();
+    predictionLines[idx] = null;
+  }
+  predictionLines[idx] = buildPredictionLine(pointData[idx]);
+}
+
+for (let i = 0; i < pointData.length; i++) {
+  predictionLines.push(buildPredictionLine(pointData[i]));
 }
 
 // ── PULSE WAVE ────────────────────────────────────────────────────────────
@@ -1221,6 +1654,81 @@ let activeIdx = null;
 let currentFilter = 'all';
 let searchQuery = '';
 
+// ── MULTI-SELECT (Ctrl+click toggles, Shift+click selects a range) ────────
+// `activeIdx` stays the single "primary" selection driving the detail panel
+// and the pulse/focus effects; `selectedIndices` additionally tracks every
+// point in the current multi-selection for sidebar highlighting.
+let selectedIndices = new Set();
+let selectionAnchor = null; // last plain/ctrl click — the start of a future Shift-range
+
+function updateSelectionHud() {
+  const hud = document.getElementById('hud-active');
+  if (selectedIndices.size > 1) {
+    hud.textContent = `${selectedIndices.size} selected`;
+  } else if (selectedIndices.size === 1) {
+    hud.textContent = pointData[[...selectedIndices][0]].name;
+  } else {
+    hud.textContent = '—';
+  }
+  updateBulkButtonLabels();
+}
+
+function markMultiSelected(i, on) {
+  document.querySelector(`.point-item[data-idx="${i}"]`)?.classList.toggle('multi-selected', on);
+}
+
+function clearSelection() {
+  for (const idx of selectedIndices) markMultiSelected(idx, false);
+  selectedIndices.clear();
+  document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
+  activeIdx = null;
+  hitFlashes.clear();
+  document.getElementById('detail-panel').style.display = 'none';
+  updateSelectionHud();
+}
+
+function replaceSelection(i) {
+  for (const idx of selectedIndices) markMultiSelected(idx, false);
+  selectedIndices = new Set([i]);
+  selectPoint(i); // existing single-select path: sets activeIdx, detail panel, pulse, '.active' class
+  updateSelectionHud();
+}
+
+function toggleSelection(i) {
+  if (selectedIndices.has(i)) {
+    selectedIndices.delete(i);
+    markMultiSelected(i, false);
+    if (activeIdx === i) {
+      const next = selectedIndices.values().next().value;
+      if (next !== undefined) {
+        selectPoint(next);
+      } else {
+        document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
+        activeIdx = null;
+        hitFlashes.clear();
+        document.getElementById('detail-panel').style.display = 'none';
+      }
+    }
+  } else {
+    selectedIndices.add(i);
+    markMultiSelected(i, true);
+    selectPoint(i); // also make this the primary (detail panel/pulse)
+  }
+  updateSelectionHud();
+}
+
+function selectRange(fromIdx, toIdx) {
+  const lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx);
+  for (const idx of selectedIndices) markMultiSelected(idx, false);
+  selectedIndices = new Set();
+  for (let idx = lo; idx <= hi; idx++) {
+    selectedIndices.add(idx);
+    markMultiSelected(idx, true);
+  }
+  selectPoint(toIdx);
+  updateSelectionHud();
+}
+
 function updateVisibility() {
   let vis = 0, hid = 0, match = 0;
 
@@ -1259,11 +1767,50 @@ function updateVisibility() {
   noRes.style.display = hasVisible ? 'none' : 'block';
 }
 
+// ── BUILD PLANET LIST ─────────────────────────────────────────────────────
+// Planets aren't part of pointData/selection (no hide/edit/multi-select —
+// none of those concepts apply to a plugin-synced planet), just a quick way
+// to jump the camera to one. Hollow orange hexagon icon distinguishes them
+// at a glance from GPS points' solid-filled ones.
+{
+  const planetListEl = document.getElementById('planet-list');
+  if (PLANETS.length) {
+    const label = document.createElement('div');
+    label.className = 'planet-list-label';
+    label.textContent = 'PLANETS';
+    planetListEl.appendChild(label);
+
+    for (const planet of PLANETS) {
+      const item = document.createElement('div');
+      item.className = 'planet-item';
+
+      item.innerHTML = `
+        <svg class="planet-icon" width="12" height="12" viewBox="0 0 24 24">
+          <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="none" stroke="#ff9900" stroke-width="2"/>
+        </svg>
+        <div class="planet-info">
+          <div class="planet-name"></div>
+          <div class="planet-radius"></div>
+        </div>
+        <button class="pt-focus" title="Focus camera">◎</button>
+      `;
+      item.querySelector('.planet-name').textContent = planet.name;
+      item.querySelector('.planet-radius').textContent = `R ${Math.round(planet.radius).toLocaleString()} m`;
+      item.querySelector('.pt-focus').addEventListener('click', (e) => {
+        e.stopPropagation();
+        panCameraTo(planet.x, planet.y, planet.z);
+      });
+
+      item.addEventListener('click', () => panCameraTo(planet.x, planet.y, planet.z));
+      planetListEl.appendChild(item);
+    }
+  }
+}
+
 // ── BUILD LIST ────────────────────────────────────────────────────────────
 const listEl = document.getElementById('point-list');
 
-for (let i = 0; i < pointData.length; i++) {
-  const p = pointData[i];
+function createListItem(p, i) {
   const item = document.createElement('div');
   item.className = 'point-item';
   item.dataset.idx = i;
@@ -1282,10 +1829,18 @@ for (let i = 0; i < pointData.length; i++) {
 
   const coordEl = document.createElement('div');
   coordEl.className = 'pt-coords';
+  coordEl.id = `coords-${i}`;
   coordEl.textContent = `${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}`;
 
   info.appendChild(nameEl);
   info.appendChild(coordEl);
+
+  if (p.lastSeenAt) {
+    const lastSeenEl = document.createElement('div');
+    lastSeenEl.className = 'pt-lastseen';
+    lastSeenEl.id = `lastseen-${i}`;
+    info.appendChild(lastSeenEl);
+  }
 
   item.appendChild(dot);
   item.appendChild(info);
@@ -1322,21 +1877,49 @@ for (let i = 0; i < pointData.length; i++) {
   });
   item.appendChild(visBtn);
 
-  item.addEventListener('click', () => {
+  if (LIVE && !p.velocity) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'pt-focus'; // reuse the same button styling as focus/visibility
+    editBtn.textContent = '✎';
+    editBtn.title = 'Edit name/color';
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditModal(i);
+    });
+    item.appendChild(editBtn);
+  }
+
+  // Shift-click normally extends a text selection starting at mousedown,
+  // before 'click' ever fires — CSS user-select alone doesn't reliably stop
+  // that in every browser, so also suppress it here directly.
+  item.addEventListener('mousedown', (e) => {
+    if (e.shiftKey) e.preventDefault();
+  });
+
+  item.addEventListener('click', (e) => {
     if (measureMode) {
       pickMeasurePoint(i);
-    } else if (i === activeIdx) {
-      document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
-      activeIdx = null;
-      hitFlashes.clear();
-      document.getElementById('hud-active').textContent = '—';
-      document.getElementById('detail-panel').style.display = 'none';
+      return;
+    }
+
+    if (e.shiftKey && selectionAnchor !== null) {
+      selectRange(selectionAnchor, i);
+    } else if (e.ctrlKey || e.metaKey) {
+      toggleSelection(i);
+      selectionAnchor = i;
+    } else if (selectedIndices.size === 1 && selectedIndices.has(i)) {
+      clearSelection();
     } else {
-      selectPoint(i);
+      replaceSelection(i);
+      selectionAnchor = i;
     }
   });
 
-  listEl.appendChild(item);
+  return item;
+}
+
+for (let i = 0; i < pointData.length; i++) {
+  listEl.appendChild(createListItem(pointData[i], i));
 }
 
 updateVisibility();
@@ -1492,7 +2075,97 @@ function selectPoint(i) {
   document.getElementById('detail-y').textContent = p.y.toFixed(3);
   document.getElementById('detail-z').textContent = p.z.toFixed(3);
   document.getElementById('detail-tag').textContent = p.tag || '—';
+  updateSpeedRow(p);
+  updateLastSeenDisplays();
 }
+
+function updateSpeedRow(p) {
+  const row = document.getElementById('detail-speed-row');
+  if (p.velocity) {
+    row.style.display = '';
+    const el = document.getElementById('detail-speed');
+    const prefix = p.velocity.derived ? '~' : ''; // ~ = estimated from position, not real physics telemetry
+    el.textContent = `${prefix}${p.velocity.speed.toFixed(1)} m/s`;
+    el.title = p.velocity.derived
+      ? 'Estimated from recent position change — the ship\'s physics reported ~0 velocity (e.g. an FTL/warp mod)'
+      : '';
+  } else {
+    row.style.display = 'none';
+  }
+}
+
+// ── LAST HEARD FROM ───────────────────────────────────────────────────────
+// Ticks up every second (independent of the 3s live-data poll) so it reads
+// smoothly, e.g. "3s ago" -> "4s ago" rather than jumping in 3s increments.
+const STALE_AFTER_SECONDS = 30; // no update in this long -> likely disconnected
+
+function formatAgo(seconds) {
+  if (seconds < 1) return 'just now';
+  if (seconds < 60) return `${Math.floor(seconds)}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${Math.floor(seconds % 60)}s ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m ago`;
+}
+
+function updateLastSeenDisplays() {
+  const nowSeconds = Date.now() / 1000;
+
+  for (const p of pointData) {
+    if (!p.lastSeenAt) continue;
+    const ago = nowSeconds - p.lastSeenAt;
+    const text = `Last heard: ${formatAgo(ago)}`;
+    const stale = ago > STALE_AFTER_SECONDS;
+
+    let el = document.getElementById(`lastseen-${p.id}`);
+    if (!el) {
+      // Point didn't have lastSeenAt yet when its sidebar item was first
+      // built — create the element now that data's arrived.
+      const item = document.querySelector(`.point-item[data-idx="${p.id}"] .pt-info`);
+      if (!item) continue;
+      el = document.createElement('div');
+      el.className = 'pt-lastseen';
+      el.id = `lastseen-${p.id}`;
+      item.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.toggle('stale', stale);
+
+    if (activeIdx === p.id) {
+      const row = document.getElementById('detail-lastseen-row');
+      row.style.display = '';
+      document.getElementById('detail-lastseen').textContent = formatAgo(ago);
+      document.getElementById('detail-lastseen').style.color = stale ? '#e08860' : '#c8c8c8';
+    }
+  }
+
+  if (activeIdx !== null && !pointData[activeIdx].lastSeenAt) {
+    document.getElementById('detail-lastseen-row').style.display = 'none';
+  }
+}
+
+// ── ACTIVE PLAYER COUNT ───────────────────────────────────────────────────
+const ACTIVE_PLAYER_WINDOW_SECONDS = 300; // 5 minutes
+
+function updateActivePlayerCount() {
+  const nowSeconds = Date.now() / 1000;
+  let playerCount = 0;
+  let hostileCount = 0;
+  for (const p of pointData) {
+    if (!p.velocity || !p.lastSeenAt || (nowSeconds - p.lastSeenAt) > ACTIVE_PLAYER_WINDOW_SECONDS) continue;
+    if (p.name.startsWith(HOSTILE_MARKER_PREFIX)) hostileCount++;
+    else playerCount++;
+  }
+  document.getElementById('active-player-count').textContent = playerCount;
+  document.getElementById('active-hostile-count').textContent = hostileCount;
+}
+
+updateLastSeenDisplays();
+updateActivePlayerCount();
+setInterval(() => {
+  updateLastSeenDisplays();
+  updateActivePlayerCount();
+}, 1000);
 
 // ── DISTANCE RINGS around focused point ──────────────────────────────────
 const RING_RADII_KM = [5, 10, 25]; // km
@@ -1526,10 +2199,8 @@ function updateDistanceRings() {
   distanceRings.length = 0;
 }
 
-function focusPoint(i) {
-  selectPoint(i);
-  const p = pointData[i];
-  const target = new THREE.Vector3(p.x, p.y, p.z);
+function panCameraTo(x, y, z) {
+  const target = new THREE.Vector3(x, y, z);
 
   // Keep current distance from camera — only pan the orbit target
   const currentDist = camera.position.distanceTo(controls.target);
@@ -1549,6 +2220,12 @@ function focusPoint(i) {
     if (t < dur) requestAnimationFrame(animStep);
   }
   animStep();
+}
+
+function focusPoint(i) {
+  selectPoint(i);
+  const p = pointData[i];
+  panCameraTo(p.x, p.y, p.z);
 }
 
 // ── SEARCH ───────────────────────────────────────────────────────────────
@@ -1614,31 +2291,32 @@ document.getElementById('filter-bar').addEventListener('click', (e) => {
 });
 
 // ── BULK ACTIONS ─────────────────────────────────────────────────────────
+// With more than one point selected, these act on just the selection and
+// relabel themselves accordingly; otherwise they act on everything, as before.
+function setPointHidden(i, hidden) {
+  pointData[i].hidden = hidden;
+  const btn = document.querySelector(`.point-item[data-idx="${i}"] .pt-vis`);
+  if (btn) {
+    btn.textContent = hidden ? '◌' : '◉';
+    btn.classList.toggle('hidden', hidden);
+  }
+}
+
+function updateBulkButtonLabels() {
+  const scoped = selectedIndices.size > 1;
+  document.getElementById('btn-show-all').textContent = scoped ? 'SHOW SELECTED' : 'SHOW ALL';
+  document.getElementById('btn-hide-all').textContent = scoped ? 'HIDE SELECTED' : 'HIDE ALL';
+}
+
 document.getElementById('btn-show-all').addEventListener('click', () => {
-  pointData.forEach((p, i) => {
-    p.hidden = false;
-    const btn = document.querySelector(`.point-item[data-idx="${i}"] .pt-vis`);
-    if (btn) { btn.textContent = '◉'; btn.classList.remove('hidden'); }
-  });
+  const targets = selectedIndices.size > 1 ? selectedIndices : pointData.map((_, i) => i);
+  for (const i of targets) setPointHidden(i, false);
   updateVisibility();
 });
 
 document.getElementById('btn-hide-all').addEventListener('click', () => {
-  pointData.forEach((p, i) => {
-    p.hidden = true;
-    const btn = document.querySelector(`.point-item[data-idx="${i}"] .pt-vis`);
-    if (btn) { btn.textContent = '◌'; btn.classList.add('hidden'); }
-  });
-  updateVisibility();
-});
-
-document.getElementById('btn-hide-filtered').addEventListener('click', () => {
-  document.querySelectorAll('.point-item:not(.no-match)').forEach(item => {
-    const i = parseInt(item.dataset.idx);
-    pointData[i].hidden = true;
-    const btn = item.querySelector('.pt-vis');
-    if (btn) { btn.textContent = '◌'; btn.classList.add('hidden'); }
-  });
+  const targets = selectedIndices.size > 1 ? selectedIndices : pointData.map((_, i) => i);
+  for (const i of targets) setPointHidden(i, true);
   updateVisibility();
 });
 
@@ -1732,15 +2410,372 @@ setInterval(updateClock, 1000);
 // ── RESIZE ────────────────────────────────────────────────────────────────
 window.addEventListener('resize', resizeRenderer);
 
+// ── LIVE POLLING ──────────────────────────────────────────────────────────
+// Only active on the server-served /map/frame view (LIVE is non-null there).
+// Points that appear for the first time after initial render get a new
+// marker + sidebar entry created on the fly; points that disappear (e.g.
+// removed via a Discord command) are hidden rather than deleted, so no
+// existing index ever shifts.
+const byName = new Map(pointData.map(p => [p.name, p]));
+
+async function pollLiveData() {
+  try {
+    const res = await fetch(`/map/live?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    applyLiveUpdate(data);
+  } catch (e) {
+    // Network hiccup — try again on the next tick.
+  }
+}
+
+function addLivePoint(fresh, extra) {
+  const idx = pointData.length;
+  const p = {
+    ...fresh,
+    tag: extractTag(fresh.name),
+    type: extractType(fresh.name),
+    hidden: false,
+    removedByServer: false,
+    id: idx,
+    trail: (extra && extra.trail) || [],
+    velocity: (extra && extra.velocity) || null,
+    prediction: (extra && extra.prediction) || [],
+    lastSeenAt: (extra && extra.last_seen_at) || null,
+    basePos: { x: fresh.x, y: fresh.y, z: fresh.z },
+    lastUpdateAt: Date.now(),
+  };
+  pointData.push(p);
+  byName.set(p.name, p);
+
+  const { mesh, glow } = createPointVisual(p);
+  meshes.push(mesh);
+  glows.push(glow);
+  trailLines.push(buildTrailLine(p));
+  predictionLines.push(buildPredictionLine(p));
+
+  listEl.appendChild(createListItem(p, idx));
+  updateLastSeenDisplays();
+  return p;
+}
+
+function applyLiveUpdate(data) {
+  const freshByName = new Map(data.points.map(fp => [fp.name, fp]));
+  let structureChanged = false;
+
+  for (const fresh of data.points) {
+    let p = byName.get(fresh.name);
+    const extra = data.extras && data.extras[fresh.name];
+
+    if (!p) {
+      p = addLivePoint(fresh, extra);
+      structureChanged = true;
+    }
+
+    const idx = p.id;
+    p.x = fresh.x;
+    p.y = fresh.y;
+    p.z = fresh.z;
+    p.color = fresh.color;
+    // Re-anchor dead reckoning to this authoritative sample — corrects any
+    // drift the extrapolation accumulated since the last poll.
+    p.basePos = { x: fresh.x, y: fresh.y, z: fresh.z };
+    p.lastUpdateAt = Date.now();
+    if (p.removedByServer) {
+      // Reappeared after being removed server-side — restore visibility.
+      // A point the user manually hid (removedByServer stays false) is left alone.
+      p.removedByServer = false;
+      p.hidden = false;
+      structureChanged = true;
+    }
+    meshes[idx].position.set(p.x, p.y, p.z);
+    meshes[idx].material.color.set(p.color);
+    glows[idx].position.set(p.x, p.y, p.z);
+    glows[idx].material.color.set(p.color);
+
+    p.trail = (extra && extra.trail) || [];
+    p.velocity = (extra && extra.velocity) || null;
+    p.prediction = (extra && extra.prediction) || [];
+    p.lastSeenAt = (extra && extra.last_seen_at) || null;
+    updateTrailLine(idx);
+    updatePredictionLine(idx);
+
+    if (activeIdx === idx) {
+      document.getElementById('detail-x').textContent = p.x.toFixed(3);
+      document.getElementById('detail-y').textContent = p.y.toFixed(3);
+      document.getElementById('detail-z').textContent = p.z.toFixed(3);
+      updateSpeedRow(p);
+    }
+  }
+  updateLastSeenDisplays();
+
+  // Anything tracked here but absent from the fresh list was removed
+  // server-side (e.g. deleted via a Discord command) — hide it in place.
+  // Points already hidden (manually or previously removed) are left as-is.
+  for (const [name, p] of byName) {
+    if (freshByName.has(name) || p.hidden) continue;
+    p.hidden = true;
+    p.removedByServer = true;
+    structureChanged = true;
+    selectedIndices.delete(p.id);
+    markMultiSelected(p.id, false);
+    if (activeIdx === p.id) {
+      document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
+      activeIdx = null;
+      hitFlashes.clear();
+      document.getElementById('detail-panel').style.display = 'none';
+      updateSelectionHud();
+    }
+  }
+
+  if (structureChanged) updateVisibility();
+}
+
+if (LIVE) {
+  setInterval(pollLiveData, LIVE.pollMs);
+}
+
+// ── EDIT MODAL (name/color) ───────────────────────────────────────────────
+// Only meaningful on the live server view — there's nothing to save to from
+// the standalone downloaded file, so its edit buttons are never created
+// there (see createListItem) and this code simply has nothing to wire up.
+let editingIdx = null;
+
+function hexToRgb(hex) {
+  const c = hex.replace('#', '');
+  return {
+    r: parseInt(c.substring(0, 2), 16) || 0,
+    g: parseInt(c.substring(2, 4), 16) || 0,
+    b: parseInt(c.substring(4, 6), 16) || 0,
+  };
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+// Hue 0-360 / Saturation 0-100 / Value 0-100 — matching Space Engineers' own
+// GPS color editor axes, rather than raw RGB channels.
+function hsvToRgb(h, s, v) {
+  s /= 100; v /= 100;
+  const c = v * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = v - c;
+  let r, g, b;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255),
+  };
+}
+
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = 60 * (((g - b) / d) % 6);
+    else if (max === g) h = 60 * ((b - r) / d + 2);
+    else h = 60 * ((r - g) / d + 4);
+  }
+  if (h < 0) h += 360;
+  return { h, s: max === 0 ? 0 : (d / max) * 100, v: max * 100 };
+}
+
+// Live preview, plus the S/V bars' own gradients (each depends on the
+// current hue, unlike the H bar's fixed rainbow) — a real HSV picker, not
+// just a fixed-gradient approximation.
+function updateColorPreview() {
+  const h = Number(document.getElementById('edit-color-h').value);
+  const s = Number(document.getElementById('edit-color-s').value);
+  const v = Number(document.getElementById('edit-color-v').value);
+  document.getElementById('edit-color-h-val').textContent = h;
+  document.getElementById('edit-color-s-val').textContent = s;
+  document.getElementById('edit-color-v-val').textContent = v;
+
+  const { r, g, b } = hsvToRgb(h, s, v);
+  const hex = rgbToHex(r, g, b);
+  document.getElementById('edit-color-preview').style.background = hex;
+
+  return hex;
+}
+
+for (const id of ['edit-color-h', 'edit-color-s', 'edit-color-v']) {
+  document.getElementById(id).addEventListener('input', updateColorPreview);
+}
+
+function openEditModal(i) {
+  editingIdx = i;
+  const p = pointData[i];
+  document.getElementById('edit-name-input').value = p.name;
+  const { r, g, b } = hexToRgb(p.color);
+  const { h, s, v } = rgbToHsv(r, g, b);
+  document.getElementById('edit-color-h').value = Math.round(h);
+  document.getElementById('edit-color-s').value = Math.round(s);
+  document.getElementById('edit-color-v').value = Math.round(v);
+  updateColorPreview();
+  document.getElementById('edit-modal-error').style.display = 'none';
+  document.getElementById('edit-modal-backdrop').classList.add('open');
+  document.getElementById('edit-name-input').focus();
+}
+
+function closeEditModal() {
+  editingIdx = null;
+  document.getElementById('edit-modal-backdrop').classList.remove('open');
+}
+
+async function saveEdit() {
+  if (editingIdx === null) return;
+  const idx = editingIdx;
+  const p = pointData[idx];
+  const newName = document.getElementById('edit-name-input').value.trim();
+  const newColor = updateColorPreview();
+  const errorEl = document.getElementById('edit-modal-error');
+
+  if (!newName) {
+    errorEl.textContent = 'Name cannot be empty.';
+    errorEl.style.display = '';
+    return;
+  }
+
+  let response;
+  try {
+    response = await fetch('/map/edit_point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guild_id: LIVE.guildId,
+        channel_id: LIVE.channelId,
+        old_name: p.name,
+        new_name: newName,
+        color: newColor,
+      }),
+    });
+  } catch (e) {
+    errorEl.textContent = 'Network error — try again.';
+    errorEl.style.display = '';
+    return;
+  }
+
+  if (!response.ok) {
+    let message = 'Save failed.';
+    try { message = (await response.json()).error || message; } catch (e) {}
+    errorEl.textContent = message;
+    errorEl.style.display = '';
+    return;
+  }
+
+  // Reflect the change locally instead of reloading the page.
+  if (byName.get(p.name) === p) byName.delete(p.name);
+  p.name = newName;
+  p.color = newColor;
+  byName.set(p.name, p);
+  p.tag = extractTag(p.name);
+  p.type = extractType(p.name);
+
+  meshes[idx].material.color.set(p.color);
+  glows[idx].material.color.set(p.color);
+
+  const row = document.querySelector(`.point-item[data-idx="${idx}"]`);
+  if (row) {
+    const dot = row.querySelector('.pt-color');
+    if (dot) { dot.style.background = p.color; dot.style.color = p.color; }
+    const nameEl = row.querySelector('.pt-name');
+    if (nameEl) nameEl.textContent = p.name;
+  }
+  if (activeIdx === idx) {
+    document.getElementById('detail-name').textContent = p.name;
+    document.getElementById('detail-tag').textContent = p.tag || '—';
+  }
+  updateSelectionHud();
+
+  closeEditModal();
+}
+
+document.getElementById('edit-cancel-btn').addEventListener('click', closeEditModal);
+document.getElementById('edit-save-btn').addEventListener('click', saveEdit);
+document.getElementById('edit-modal-backdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'edit-modal-backdrop') closeEditModal();
+});
+document.getElementById('edit-name-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') saveEdit();
+  else if (e.key === 'Escape') closeEditModal();
+});
+
+// ── LIVE DEAD RECKONING ───────────────────────────────────────────────────
+// Between polls (every ~3s), extrapolate each live player's on-screen
+// position every frame from their last known velocity/acceleration, instead
+// of only moving them when fresh data arrives — corrected back to the real
+// value ("update as needed") the moment the next poll lands.
+// Text updates are throttled separately from the marker's own motion: the
+// mesh/glow position is cheap to change every frame (just a WebGL transform),
+// but rewriting text inside the detail panel (which has a blurred,
+// clip-path-cut background) 60 times a second was visibly flickering its
+// corners. ~7Hz still reads as continuously live to a human, at a fraction
+// of the DOM churn.
+let lastCoordTextUpdateMs = 0;
+const COORD_TEXT_UPDATE_INTERVAL_MS = 150;
+
+function updateLiveDeadReckoning() {
+  const nowMs = Date.now();
+  const updateText = nowMs - lastCoordTextUpdateMs >= COORD_TEXT_UPDATE_INTERVAL_MS;
+  if (updateText) lastCoordTextUpdateMs = nowMs;
+
+  for (const p of pointData) {
+    if (!p.velocity || p.hidden) continue;
+    const dt = (nowMs - p.lastUpdateAt) / 1000;
+    const v = p.velocity;
+    const ax = v.ax || 0, ay = v.ay || 0, az = v.az || 0;
+    p.x = p.basePos.x + v.vx * dt + 0.5 * ax * dt * dt;
+    p.y = p.basePos.y + v.vy * dt + 0.5 * ay * dt * dt;
+    p.z = p.basePos.z + v.vz * dt + 0.5 * az * dt * dt;
+
+    const idx = p.id;
+    meshes[idx].position.set(p.x, p.y, p.z);
+    glows[idx].position.set(p.x, p.y, p.z);
+
+    if (!updateText) continue;
+
+    // Keep the displayed coordinates live too, not just the 3D marker —
+    // otherwise the sidebar/detail readouts would sit frozen at whatever
+    // they showed at the last ~3s poll while the dot visibly moves.
+    const coordEl = document.getElementById(`coords-${idx}`);
+    if (coordEl) coordEl.textContent = `${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}`;
+
+    if (activeIdx === idx) {
+      document.getElementById('detail-x').textContent = p.x.toFixed(3);
+      document.getElementById('detail-y').textContent = p.y.toFixed(3);
+      document.getElementById('detail-z').textContent = p.z.toFixed(3);
+    }
+  }
+}
+
 // ── RENDER LOOP ───────────────────────────────────────────────────────────
 let frame = 0;
 const _camPos = new THREE.Vector3();
 const _ptPos  = new THREE.Vector3();
+const DASH_ANIM_SPEED = 0.02; // fraction of DASH_SIZE per frame
 
 (function loop() {
   requestAnimationFrame(loop);
   controls.update();
   frame++;
+
+  updateLiveDeadReckoning();
+
+  // Flowing "marching ants" animation on prediction lines, distinguishing
+  // them from the static solid trail at a glance.
+  for (const line of predictionLines) {
+    if (!line) continue;
+    line.material.dashOffset -= DASH_SIZE * DASH_ANIM_SPEED;
+  }
 
   // Distance-based point scaling
   camera.getWorldPosition(_camPos);
