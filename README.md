@@ -124,7 +124,7 @@ The [`plugin/`](plugin/) folder is a standalone client plugin loaded by [Pulsar]
 **Setup:**
 1. On the bot side, `/bind` a channel and run `/create_sync_token` to get an endpoint + token.
 2. In Pulsar, add this plugin as a source using the raw URL to [`plugin/GpsSyncPlugin.xml`](plugin/GpsSyncPlugin.xml) — Pulsar reads that manifest to pull the source from this repo (via `RepoId`/`Commit`), build it (pointing `GameBinPath` at your Space Engineers `Bin64` folder — see [`plugin/GpsSyncPlugin.csproj`](plugin/GpsSyncPlugin.csproj)), and list it in-game. Alternatively, build the `.csproj` yourself and load the resulting DLL via Pulsar's local/manual plugin option.
-3. In Pulsar's plugin list, select **GPS Sync** and click **Configure** to open its settings dialog; set `Endpoint`/`Token` to the values from step 1 (endpoint/token changes apply immediately; interval changes need a restart).
+3. In Pulsar's plugin list, select **GPS Vault Sync** and click **Configure** to open its settings dialog; set `Endpoint`/`Token` to the values from step 1 (endpoint/token changes apply immediately; interval changes need a restart).
 
 > `plugin/GpsSyncPlugin.xml` pins a specific commit (`Commit`) — after pushing changes to `plugin/`, update that field to the new commit hash so Pulsar picks up the change.
 

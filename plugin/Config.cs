@@ -22,7 +22,7 @@ namespace GpsSyncPlugin
 
         #region User interface
 
-        public readonly string Title = "GPS Sync";
+        public readonly string Title = "GPS Vault Sync";
 
         [Separator("Discord bot connection")]
 
