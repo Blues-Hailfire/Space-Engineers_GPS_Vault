@@ -17,7 +17,8 @@ from urllib.parse import urlencode
 import aiohttp
 from aiohttp import web
 
-OAUTH_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "oauth_config.json")
+import bot_config
+
 SESSION_SECRET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "session_secret.key")
 
 SESSION_COOKIE_NAME = "gps_session"
@@ -30,13 +31,16 @@ DISCORD_USER_URL = "https://discord.com/api/users/@me"
 
 
 def load_oauth_config():
-    if os.path.exists(OAUTH_CONFIG_PATH):
-        with open(OAUTH_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    cfg = {"client_id": None, "client_secret": None, "redirect_uri": None}
-    with open(OAUTH_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
-    return cfg
+    """OAuth client_id/client_secret/redirect_uri, sourced from the same
+    bot_config.json everything else uses now (see bot_config.py) — reshaped
+    to the {client_id, client_secret, redirect_uri} keys the rest of this
+    module already expects."""
+    cfg = bot_config.load()
+    return {
+        "client_id": cfg.get("oauth_client_id"),
+        "client_secret": cfg.get("oauth_client_secret"),
+        "redirect_uri": cfg.get("oauth_redirect_uri"),
+    }
 
 
 def oauth_configured(cfg) -> bool:

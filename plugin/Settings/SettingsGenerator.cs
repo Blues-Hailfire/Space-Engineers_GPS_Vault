@@ -16,6 +16,25 @@ internal class AttributeInfo
     public string Name;
     public Func<object> Getter;
     public Action<object> Setter;
+
+    // Set from a [RenderAfter("OtherMemberName")] on the same member, if
+    // present — see ExtractAttributes' final reorder pass.
+    public string InsertAfter;
+}
+
+/// <summary>
+/// Optional marker for a [Button]/etc-attributed method: renders its row
+/// immediately after the row for the named property/method, overriding the
+/// default order (all property rows in declaration order, then all method
+/// rows in declaration order — methods always trail every property because
+/// MethodInfo/PropertyInfo MetadataTokens live in separate metadata tables
+/// and can't be interleaved by sorting on the token alone).
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+internal class RenderAfterAttribute : Attribute
+{
+    public readonly string Name;
+    public RenderAfterAttribute(string name) => Name = name;
 }
 
 internal class SettingsGenerator
@@ -119,6 +138,7 @@ internal class SettingsGenerator
         {
             string name = methodInfo.Name;
             Delegate method = GetDelegate(methodInfo);
+            var renderAfter = methodInfo.GetCustomAttribute<RenderAfterAttribute>()?.Name;
 
             foreach (var attribute in methodInfo.GetCustomAttributes())
             {
@@ -137,11 +157,38 @@ internal class SettingsGenerator
                         ElementType = element,
                         Name = name,
                         Getter = () => method,
-                        Setter = null
+                        Setter = null,
+                        InsertAfter = renderAfter
                     };
                     config.Add(info);
                 }
             }
+        }
+
+        // Methods always land after every property above (MethodInfo and
+        // PropertyInfo occupy separate metadata tables, so there's no single
+        // token order spanning both) — [RenderAfter] moves a method's row
+        // next to a specific property/method instead. Pull every such row
+        // out first, then reinsert them back-to-front (each right after its
+        // anchor) so several rows anchored to the same target end up in
+        // their original relative order — doing this in one mutating pass
+        // over `config` (remove-and-reinsert while iterating by index) is
+        // the wrong way to do it: a removal can shift a not-yet-visited row
+        // forward past the index the loop counter has already gone by,
+        // silently skipping it.
+        var toMove = config.Where(a => a.InsertAfter != null).ToList();
+        config.RemoveAll(a => a.InsertAfter != null);
+
+        for (int i = toMove.Count - 1; i >= 0; i--)
+        {
+            var moved = toMove[i];
+            var anchorIndex = config.FindIndex(a => a.Name == moved.InsertAfter);
+            if (anchorIndex < 0)
+            {
+                config.Add(moved); // anchor not found — keep the row rather than drop it
+                continue;
+            }
+            config.Insert(anchorIndex + 1, moved);
         }
 
         return config;

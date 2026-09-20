@@ -9,7 +9,7 @@ A locally-hosted Discord bot for managing Space Engineers GPS coordinates within
 - Python 3.8+
 - `discord.py >= 2.3.0`
 - `aiohttp >= 3.8.0` (also powers the optional plugin sync API)
-- A Discord bot token in `DiscordToken.txt`
+- A Discord bot token, in `bot_config.json`'s `discord_token`
 
 Run `setup.py` to create the virtual environment and install dependencies.
 
@@ -17,9 +17,10 @@ Run `setup.py` to create the virtual environment and install dependencies.
 
 ## Setup
 
-1. Create a Discord bot and place its token in `DiscordToken.txt`.
+1. Create a Discord bot and put its token, and everything else below, in `bot_config.json` (auto-created with null placeholders on first run — see [`bot_config.py`](bot_config.py); one file for the bot token, sync API host/port, and Discord OAuth credentials, all git-ignored since it holds secrets).
 2. Run `python setup.py` to initialise the virtual environment.
-3. (Optional, for the plugin) Edit `sync_config.json` — `port` for the sync API, and `public_host` set to the address other machines (like your gaming PC) can reach this bot at, so `/create_sync_token` prints a usable endpoint. Forward/open that port on the machine running the bot.
+3. (Optional, for the plugin) In `bot_config.json`, set `port` for the sync API, and `public_host` to the address other machines (like your gaming PC) can reach this bot at, so `/create_sync_token` prints a usable endpoint. Forward/open that port on the machine running the bot.
+   - By default this serves plain HTTP — fine for same-machine/LAN testing, but the plugin's sync token and your GPS data travel unencrypted. To enable HTTPS, set `cert_file`/`key_file` to a PEM cert+key pair (run `scripts/gen_dev_cert.sh` for a self-signed one to test with; swap in a real cert once you have a domain). To migrate an already-deployed bot without breaking existing plugin installs, also set `https_port` to a different port than `port` — the server then serves plain HTTP on `port` (for old installs) *and* HTTPS on `https_port` at the same time, until everyone's moved over.
 4. Start the bot: `python VectorHandler.py`.
 5. In your target Discord channel, run `/bind` (requires Administrator) to lock the bot to that channel.
 
@@ -124,7 +125,7 @@ The [`plugin/`](plugin/) folder is a standalone client plugin loaded by [Pulsar]
 **Setup:**
 1. On the bot side, `/bind` a channel and run `/create_sync_token` to get an endpoint + token.
 2. In Pulsar, add this plugin as a source using the raw URL to [`plugin/GpsSyncPlugin.xml`](plugin/GpsSyncPlugin.xml) — Pulsar reads that manifest to pull the source from this repo (via `RepoId`/`Commit`), build it (pointing `GameBinPath` at your Space Engineers `Bin64` folder — see [`plugin/GpsSyncPlugin.csproj`](plugin/GpsSyncPlugin.csproj)), and list it in-game. Alternatively, build the `.csproj` yourself and load the resulting DLL via Pulsar's local/manual plugin option.
-3. In Pulsar's plugin list, select **GPS Vault Sync** and click **Configure** to open its settings dialog; set `Endpoint`/`Token` to the values from step 1 (endpoint/token changes apply immediately; interval changes need a restart).
+3. In Pulsar's plugin list, select **GPS Vault - DataLink** and click **Configure** to open its settings dialog; pick or add a sync profile and set its `Endpoint`/`Token`/`Channel ID` to the values from step 1 (endpoint/token/channel changes apply immediately, but turn sync off for the current world until you re-enable it; interval changes need a restart). You can save several profiles (e.g. one per Discord server) and switch between them from the dropdown — use "Look Up Server/Channel Names" to label a profile with its real Discord names instead of raw IDs. Sync is off by default in every new world/server; enabling it sticks to that world+profile combination across restarts.
 
 > `plugin/GpsSyncPlugin.xml` pins a specific commit (`Commit`) — after pushing changes to `plugin/`, update that field to the new commit hash so Pulsar picks up the change.
 
@@ -137,18 +138,21 @@ The [`plugin/`](plugin/) folder is a standalone client plugin loaded by [Pulsar]
     2: Iron AST (3.40 km)
     ```
   - `/vault confirm <number> [-h | -hide all]` (aliases `/vc`, `/VC`) — reveals that result on the HUD and hides the other points from that same search. Add `-h` (or `-hide all`) to also hide every other GPS point you have, not just that search's results.
-  - `/vault sync [on|off]` — pauses or resumes all syncing (same switch as the plugin's "Sync Enabled" setting); with no argument, toggles.
+  - `/vault sync [on|off]` — pauses or resumes syncing for the current world/server and active sync profile (same switch as the plugin's "Sync Enabled" setting); with no argument, toggles.
+  - `/vault host "name"` (aliases `/vh`, `/VH`) — switches the active sync profile ("host profile") to the one with that nickname; doesn't change that world's sync on/off state, since that's saved per world+profile.
+  - `/vault list profiles` / `/vault list hosts` (aliases `/vlh`, `/VLH`) — lists your saved host profiles, marking the active one.
+  - `/vault` / `/vault help` / `/vault -h` (aliases `/v`, `/V`) — pops up an in-game dialog listing every command above and what it does.
 
 ---
 
 ## Live Web Map
 
-`/map` (served by the same sync API, default `http://localhost:8765/map`) shows a live, browser-based version of the 3D map with a channel picker labeled `GuildName/ChannelName`. Player markers move in real time, trail their last 6 hours of positions (solid line), and show a short dashed line forecasting where they're headed (extrapolated from their last observed velocity and acceleration).
+`/map` (served by the same sync API, default `http://localhost:4040/map`) shows a live, browser-based version of the 3D map with a channel picker labeled `GuildName/ChannelName`. Player markers move in real time, trail their last 6 hours of positions (solid line), and show a short dashed line forecasting where they're headed (extrapolated from their last observed velocity and acceleration).
 
 Access requires logging in with Discord — a viewer only sees channels they could actually read in that Discord server (checked live against the bot's own cached member/role/channel permissions, not stored separately). To enable login:
 
-1. In the [Discord Developer Portal](https://discord.com/developers/applications), open your bot's application → **OAuth2** → add a redirect URL: `http://<host>:<port>/oauth/callback` (matching `sync_config.json`'s `public_host`/`port`, e.g. `http://localhost:8765/oauth/callback`).
-2. Copy that page's **Client ID** and **Client Secret** into `oauth_config.json` (auto-created on first run, git-ignored) along with the exact same `redirect_uri`.
+1. In the [Discord Developer Portal](https://discord.com/developers/applications), open your bot's application → **OAuth2** → add a redirect URL: `http://<host>:<port>/oauth/callback` (matching `bot_config.json`'s `public_host`/`port`, e.g. `http://localhost:4040/oauth/callback`).
+2. Copy that page's **Client ID** and **Client Secret** into `bot_config.json`'s `oauth_client_id`/`oauth_client_secret`, along with the exact same `redirect_uri` in `oauth_redirect_uri`.
 3. Restart the bot.
 
 Until configured, `/login` shows a message instead of erroring.
@@ -161,16 +165,15 @@ Until configured, `/login` shows a message instead of erroring.
 VectorHandler.py        # Bot entry point — all commands and database logic
 sync_api.py              # HTTP API (aiohttp): plugin sync, live web map, Discord login
 web_auth.py              # Discord OAuth2 login + signed session cookies for the web map
-sync_config.json         # Host/port config for the sync API
-oauth_config.json         # Discord OAuth client_id/secret/redirect_uri (not committed)
+bot_config.py             # Loads bot_config.json (see below); shared by all three files above
+bot_config.json           # Bot token, sync API host/port, Discord OAuth creds — one file, not committed
 session_secret.key        # Auto-generated cookie-signing key (not committed)
 plugin/                  # Space Engineers client plugin (loaded by Pulsar)
 plugin/GpsSyncPlugin.xml # Pulsar PluginData manifest (repo, source dir, pinned commit)
 plugin/Settings/         # In-game settings dialog (Pulsar's "Configure" button)
 plugin/ChatCommands.cs   # In-game /vault search, /vault confirm (and /vs, /vc) commands
-templates/map.html      # Interactive 3D map template (Three.js)
+templates/map.html      # Interactive 3D map template (Three.js) — shared by the live web map and the Discord /map command
 setup.py                # Environment setup script
-DiscordToken.txt        # Bot token (not committed)
 gps.db                  # SQLite database (auto-created on first run)
 ```
 

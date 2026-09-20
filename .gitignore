@@ -1,11 +1,13 @@
 *.gitignore
 .idea/
 .claude/
-DiscordToken.txt
+.agents/
+bot_config.json
 *.db
+*.log
 gps.db
 plugin/bin/
 plugin/obj/
 __pycache__/
-oauth_config.json
 session_secret.key
+certs/

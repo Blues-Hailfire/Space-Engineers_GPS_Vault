@@ -17,6 +17,10 @@ namespace GpsSyncPlugin
     /// </summary>
     public class SyncClient
     {
+        // Shared instance: HttpClient is meant to be reused for the app's lifetime
+        // rather than one per caller (each instance owns its own connection pool).
+        public static readonly SyncClient Shared = new SyncClient();
+
         private readonly HttpClient http;
 
         public SyncClient()
@@ -26,11 +30,16 @@ namespace GpsSyncPlugin
 
         private static void AddAuthHeaders(HttpRequestMessage requestMessage)
         {
-            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Config.Current.Token);
+            AddAuthHeaders(requestMessage, Config.Current.ActiveToken, Config.Current.ActiveChannelId);
+        }
 
-            var channelId = Config.Current.ChannelId?.Trim();
-            if (!string.IsNullOrEmpty(channelId))
-                requestMessage.Headers.Add("X-Channel-Id", channelId);
+        private static void AddAuthHeaders(HttpRequestMessage requestMessage, string token, string channelId)
+        {
+            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var trimmedChannelId = channelId?.Trim();
+            if (!string.IsNullOrEmpty(trimmedChannelId))
+                requestMessage.Headers.Add("X-Channel-Id", trimmedChannelId);
         }
 
         public async Task SyncGpsAsync(GpsSyncRequest request)
@@ -62,7 +71,7 @@ namespace GpsSyncPlugin
         {
             try
             {
-                var endpoint = Config.Current.Endpoint.TrimEnd('/');
+                var endpoint = Config.Current.ActiveEndpoint.TrimEnd('/');
                 using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, endpoint + "/sync/gps"))
                 {
                     AddAuthHeaders(requestMessage);
@@ -94,7 +103,7 @@ namespace GpsSyncPlugin
         {
             try
             {
-                var endpoint = Config.Current.Endpoint.TrimEnd('/');
+                var endpoint = Config.Current.ActiveEndpoint.TrimEnd('/');
                 var query = string.IsNullOrEmpty(excludeName) ? "" : "?exclude=" + Uri.EscapeDataString(excludeName);
                 using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, endpoint + "/sync/players" + query))
                 {
@@ -119,11 +128,62 @@ namespace GpsSyncPlugin
             }
         }
 
+        /// <summary>
+        /// Resolves a profile's endpoint/token/channel to the Discord server
+        /// and channel name it points at, so the settings dialog can show a
+        /// readable label instead of a raw snowflake ID. Takes the profile's
+        /// fields explicitly (rather than reading Config.Current) since the
+        /// caller may be looking up a profile that isn't the active one.
+        /// Returns a WhoAmIResponse with .error set (not null) on a server
+        /// error (e.g. 401 "invalid or missing token" — a bad/blank Token or
+        /// wrong Endpoint, the two most common causes), so the caller can
+        /// show the actual reason. Returns null only when the server
+        /// couldn't be reached at all (network failure, wrong host/port,
+        /// TLS problem, etc.) — that case has no server-provided reason.
+        /// </summary>
+        public async Task<WhoAmIResponse> FetchWhoAmIAsync(string endpoint, string token, string channelId)
+        {
+            try
+            {
+                var trimmedEndpoint = (endpoint ?? "").TrimEnd('/');
+                using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, trimmedEndpoint + "/sync/whoami"))
+                {
+                    AddAuthHeaders(requestMessage, token, channelId);
+                    using (var response = await http.SendAsync(requestMessage))
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            Log.Instance?.Warn($"Sync GET /sync/whoami failed: {(int)response.StatusCode} {json}");
+                            WhoAmIResponse errorResponse;
+                            try
+                            {
+                                errorResponse = JsonConvert.DeserializeObject<WhoAmIResponse>(json) ?? new WhoAmIResponse();
+                            }
+                            catch (JsonException)
+                            {
+                                errorResponse = new WhoAmIResponse();
+                            }
+                            if (string.IsNullOrEmpty(errorResponse.error))
+                                errorResponse.error = $"HTTP {(int)response.StatusCode}";
+                            return errorResponse;
+                        }
+                        return JsonConvert.DeserializeObject<WhoAmIResponse>(json);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Instance?.Warn($"Sync GET /sync/whoami error: {e.Message}");
+                return null;
+            }
+        }
+
         private async Task PostAsync(string path, object body)
         {
             try
             {
-                var endpoint = Config.Current.Endpoint.TrimEnd('/');
+                var endpoint = Config.Current.ActiveEndpoint.TrimEnd('/');
                 var json = JsonConvert.SerializeObject(body);
                 using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
                 using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, endpoint + path) { Content = content })

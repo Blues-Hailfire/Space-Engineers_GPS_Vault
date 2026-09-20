@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using GpsSyncPlugin.Settings;
+using Sandbox.Graphics.GUI;
 using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
 using VRageMath;
@@ -39,6 +41,20 @@ namespace GpsSyncPlugin
     ///     never pushed back up to the vault. Running the command again while
     ///     active turns it off, removing all "[VP]" markers and stopping the
     ///     poll.
+    ///
+    ///   /vault host "name"   (aliases: /vh, /VH)
+    ///     Switches the active sync profile ("host profile") to the one whose
+    ///     nickname matches (exact match preferred, otherwise a unique
+    ///     partial match). Same effect as picking it from the settings
+    ///     dialog's Host Profile dropdown — does not change that world's
+    ///     sync on/off state, since that's saved per world+profile.
+    ///
+    ///   /vault list profiles | /vault list hosts   (aliases: /vlh, /VLH)
+    ///     Lists every saved host profile with its nickname/server/channel,
+    ///     marking the currently active one.
+    ///
+    ///   /vault | /vault help | /vault -h   (aliases: /v, /V)
+    ///     Shows a popup listing every command above and what it does.
     /// </summary>
     public static class ChatCommands
     {
@@ -46,7 +62,6 @@ namespace GpsSyncPlugin
 
         private static List<IMyGps> lastSearchResults = new List<IMyGps>();
         private static bool subscribed;
-        private static readonly SyncClient syncClient = new SyncClient();
         private static Timer vpTimer;
         private static volatile bool vpActive;
         private static volatile bool vpSyncing;
@@ -112,6 +127,31 @@ namespace GpsSyncPlugin
                         HandlePlayers();
                         sendToOthers = false;
                     }
+                    else if (subCommand == "host")
+                    {
+                        HandleHostProfile(arg);
+                        sendToOthers = false;
+                    }
+                    else if (subCommand == "list")
+                    {
+                        SplitFirstWord(arg, out var listWhat, out _);
+                        listWhat = listWhat.ToLowerInvariant();
+                        if (listWhat == "profiles" || listWhat == "hosts")
+                        {
+                            HandleListProfiles();
+                            sendToOthers = false;
+                        }
+                    }
+                    else if (subCommand == "help" || subCommand == "-h" || subCommand == "")
+                    {
+                        HandleHelp();
+                        sendToOthers = false;
+                    }
+                }
+                else if (command == "/v")
+                {
+                    HandleHelp();
+                    sendToOthers = false;
                 }
                 else if (command == "/vs")
                 {
@@ -126,6 +166,16 @@ namespace GpsSyncPlugin
                 else if (command == "/vp")
                 {
                     HandlePlayers();
+                    sendToOthers = false;
+                }
+                else if (command == "/vh")
+                {
+                    HandleHostProfile(rest);
+                    sendToOthers = false;
+                }
+                else if (command == "/vlh")
+                {
+                    HandleListProfiles();
                     sendToOthers = false;
                 }
             }
@@ -239,6 +289,9 @@ namespace GpsSyncPlugin
 
         private static void HandleSyncToggle(string arg)
         {
+            if (!GameStateReader.IsSessionReady)
+                return;
+
             var a = (arg ?? "").Trim().ToLowerInvariant();
             bool newState;
             if (a == "on")
@@ -251,9 +304,125 @@ namespace GpsSyncPlugin
             Config.Current.SyncEnabled = newState;
             ConfigStorage.Save(Config.Current);
 
-            MyAPIGateway.Utilities.ShowMessage("Vault", newState
+            // Read back rather than trust newState: SyncEnabled is scoped to
+            // the current world + active sync profile, and the write is a
+            // silent no-op if that scope couldn't be resolved (e.g. no
+            // active profile yet) — report what actually happened.
+            var applied = Config.Current.SyncEnabled;
+            MyAPIGateway.Utilities.ShowMessage("Vault", applied
                 ? "Syncing enabled."
                 : "Syncing disabled — your GPS list and position will no longer push to or pull from the vault.");
+        }
+
+        private static string StripQuotes(string text)
+        {
+            if (text.Length >= 2 && text[0] == '"' && text[text.Length - 1] == '"')
+                return text.Substring(1, text.Length - 2);
+            return text;
+        }
+
+        /// <summary>
+        /// Switches the active sync profile by nickname. Exact match (case
+        /// insensitive) wins; otherwise falls back to a substring match, but
+        /// only if it's unique — an ambiguous partial match is reported
+        /// rather than guessed at. Does not touch that world's sync on/off
+        /// state (see Config.SyncEnabled) — same as switching via the
+        /// settings dialog's dropdown.
+        /// </summary>
+        private static void HandleHostProfile(string argText)
+        {
+            if (!GameStateReader.IsSessionReady)
+                return;
+
+            var name = StripQuotes((argText ?? "").Trim());
+            if (string.IsNullOrEmpty(name))
+            {
+                MyAPIGateway.Utilities.ShowMessage("Vault", "Usage: /vault host \"name\" (or /vh \"name\") — see /vault list profiles (/vls) for names.");
+                return;
+            }
+
+            var profiles = Config.Current.Profiles;
+            var match = profiles.FirstOrDefault(p => string.Equals(p.Nickname, name, StringComparison.OrdinalIgnoreCase));
+            if (match == null)
+            {
+                var partial = profiles.Where(p => (p.Nickname ?? "").IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                if (partial.Count > 1)
+                {
+                    MyAPIGateway.Utilities.ShowMessage("Vault", $"Multiple host profiles match \"{name}\" — be more specific, or check /vault list profiles.");
+                    return;
+                }
+                match = partial.Count == 1 ? partial[0] : null;
+            }
+
+            if (match == null)
+            {
+                MyAPIGateway.Utilities.ShowMessage("Vault", $"No host profile named \"{name}\". Check /vault list profiles (/vls).");
+                return;
+            }
+
+            Config.Current.ActiveProfileId = match.Id;
+            ConfigStorage.Save(Config.Current);
+            Plugin.Instance?.RefreshSettingsUI();
+
+            var syncState = Config.Current.SyncEnabled ? "sync on" : "sync off";
+            MyAPIGateway.Utilities.ShowMessage("Vault", $"Switched to host profile \"{match.Nickname}\" ({syncState} for this world).");
+        }
+
+        private static void HandleListProfiles()
+        {
+            if (!GameStateReader.IsSessionReady)
+                return;
+
+            var profiles = Config.Current.Profiles;
+            if (profiles.Count == 0)
+            {
+                MyAPIGateway.Utilities.ShowMessage("Vault", "No host profiles saved yet — add one from the plugin's settings dialog.");
+                return;
+            }
+
+            var activeId = Config.Current.ActiveProfileId;
+            for (int i = 0; i < profiles.Count; i++)
+            {
+                var p = profiles[i];
+                var marker = p.Id == activeId ? "*" : " ";
+                MyAPIGateway.Utilities.ShowMessage("Vault", $"{marker}{i + 1}: {p.DisplayLabel}");
+            }
+        }
+
+        /// <summary>
+        /// Shows a popup (not chat spam) listing every /vault command and
+        /// what it does — a GUI message box, same mechanism the game itself
+        /// uses for its own info/confirmation dialogs.
+        /// </summary>
+        private static void HandleHelp()
+        {
+            var text = new StringBuilder();
+            text.AppendLine("/vault search [text]  (/vs)");
+            text.AppendLine("Lists your GPS points, nearest first — optionally filtered by name.");
+            text.AppendLine();
+            text.AppendLine("/vault confirm <number> [-h | -hide all]  (/vc)");
+            text.AppendLine("Reveals that search result on the HUD, hides the rest.");
+            text.AppendLine();
+            text.AppendLine("/vault sync [on|off]");
+            text.AppendLine("Toggles GPS/position syncing for this world + host profile. No argument toggles.");
+            text.AppendLine();
+            text.AppendLine("/vault players  (/vp)");
+            text.AppendLine("Toggles a live feed of other players sharing their location via the vault.");
+            text.AppendLine();
+            text.AppendLine("/vault host \"name\"  (/vh)");
+            text.AppendLine("Switches the active host profile by nickname.");
+            text.AppendLine();
+            text.AppendLine("/vault list profiles | /vault list hosts  (/vlh)");
+            text.AppendLine("Lists your saved host profiles, marking the active one.");
+            text.AppendLine();
+            text.AppendLine("/vault | /vault help | /vault -h  (/v)");
+            text.AppendLine("Shows this popup.");
+
+            MyGuiSandbox.AddScreen(MyGuiSandbox.CreateMessageBox(
+                styleEnum: MyMessageBoxStyleEnum.Info,
+                messageCaption: new StringBuilder("GPS Vault Commands"),
+                messageText: text,
+                size: new Vector2(0.6f, 0.65f)));
         }
 
         /// <summary>
@@ -313,7 +482,7 @@ namespace GpsSyncPlugin
             {
                 try
                 {
-                    var players = await syncClient.FetchActivePlayersAsync(selfName);
+                    var players = await SyncClient.Shared.FetchActivePlayersAsync(selfName);
                     if (players == null)
                         return;
 

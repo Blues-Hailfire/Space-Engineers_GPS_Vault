@@ -92,7 +92,13 @@ internal class Simple : Layout
                 }
                 else if (control.FillFactor.HasValue)
                 {
-                    guiControl.Size = new Vector2(Math.Max(control.MinWidth, unitWidth * control.FillFactor.Value), sizeY);
+                    var fillWidth = Math.Max(control.MinWidth, unitWidth * control.FillFactor.Value);
+                    guiControl.Size = new Vector2(fillWidth, sizeY);
+                    // Without this, a control whose natural content (e.g. a
+                    // button's label text) is wider than its computed slot
+                    // just overflows that slot instead of being clipped to
+                    // it — the FixedWidth branch above already does this.
+                    guiControl.SetMaxWidth(fillWidth);
                 }
                 else
                 {

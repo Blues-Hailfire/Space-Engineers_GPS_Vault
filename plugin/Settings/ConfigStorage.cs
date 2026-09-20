@@ -31,7 +31,11 @@ public static class ConfigStorage
         try
         {
             using (var streamReader = File.OpenText(path))
-                return (Config)xmlSerializer.Deserialize(streamReader) ?? Config.Default;
+            {
+                var config = (Config)xmlSerializer.Deserialize(streamReader) ?? Config.Default;
+                config.MigrateLegacyProfile();
+                return config;
+            }
         }
         catch (Exception)
         {

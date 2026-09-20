@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "skills": {
+    "se-dev": {
+      "source": "CometWorks/skills",
+      "sourceType": "github",
+      "skillPath": "skills/se-dev/SKILL.md",
+      "computedHash": "9120349156b4719df4441ce3f6bbe4d46e36c20ebdc5371b4973087dca68830c"
+    },
+    "se-dev-game-code": {
+      "source": "CometWorks/skills",
+      "sourceType": "github",
+      "skillPath": "skills/se-dev-game-code/SKILL.md",
+      "computedHash": "a8077771682874c864882c38df16caee22fb9f5f8ab8bf012304f4ef06888fb0"
+    },
+    "se-dev-mod": {
+      "source": "CometWorks/skills",
+      "sourceType": "github",
+      "skillPath": "skills/se-dev-mod/SKILL.md",
+      "computedHash": "da6a2c6aa842533f7e0293e206d2f8788fcaa74d308b6dcdfeeea797f3166169"
+    },
+    "se-dev-plugin": {
+      "source": "CometWorks/skills",
+      "sourceType": "github",
+      "skillPath": "skills/se-dev-plugin/SKILL.md",
+      "computedHash": "af5fd6d28cc281409e048f2655dd209a988e7c205ed6a32c50af1f75ac8d4ce5"
+    },
+    "se-dev-script": {
+      "source": "CometWorks/skills",
+      "sourceType": "github",
+      "skillPath": "skills/se-dev-script/SKILL.md",
+      "computedHash": "2ead59441b9e2d82ec3cbbccf1cbaceaa080cabe2fe89dd3dea34f7fb4dc320a"
+    },
+    "se-dev-server-code": {
+      "source": "CometWorks/skills",
+      "sourceType": "github",
+      "skillPath": "skills/se-dev-server-code/SKILL.md",
+      "computedHash": "2af4d45ea98493c6c0f56dc8f1be307a16f198bfb08caea14eafc49d8bef3917"
+    },
+    "se-dev-torch": {
+      "source": "CometWorks/skills",
+      "sourceType": "github",
+      "skillPath": "skills/se-dev-torch/SKILL.md",
+      "computedHash": "e56e9d75b8b735ee474a541dc7c38200ba25e5fe4691bffc7690260afe84382b"
+    }
+  }
+}

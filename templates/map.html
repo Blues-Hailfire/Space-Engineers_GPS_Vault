@@ -22,6 +22,7 @@
     --sidebar-w: 320px;
     --mono: 'Share Tech Mono', monospace;
     --head: 'Orbitron', monospace;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   html, body {
@@ -197,7 +198,7 @@
     cursor: pointer;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    transition: all 0.08s;
+    transition: all 0.14s var(--ease);
     border-radius: 0;
   }
   .filter-btn:hover { background: rgba(255,255,255,0.08); border-color: #fff; color: #fff; }
@@ -245,9 +246,37 @@
     cursor: pointer;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    transition: all 0.08s;
+    transition: all 0.14s var(--ease);
   }
   .bulk-btn:hover { background: #ffffff; border-color: #ffffff; color: #000000; }
+
+  /* Signal category legend/filter — only shown once at least one ⚠ signal
+     point (see HOSTILE_MARKER_PREFIX) with a known category is present. */
+  #signal-legend {
+    padding: 6px 10px;
+    border-bottom: var(--brut-border);
+    display: none;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+    background: #000;
+  }
+  #signal-legend.visible { display: flex; }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+  }
+  .legend-item input { accent-color: currentColor; cursor: pointer; }
+  .legend-swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
   /* Point list */
   #point-list {
@@ -340,17 +369,104 @@
   }
   .pt-lastseen.stale { color: rgba(220,120,90,0.65); }
 
+  .pt-lock {
+    font-size: 8px;
+    color: rgba(255,50,50,0.8);
+    margin-top: 1px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--mono);
+  }
+
   /* ── PLANETS (sidebar) ───────────────────────────────────── */
   #planet-list:empty { display: none; }
   #planet-list {
     border-bottom: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
   }
+  /* Capped + independently scrollable, like #point-list below it, so a world
+     with many planets doesn't grow this section and squeeze the GPS list. */
+  .planet-items {
+    max-height: 180px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,153,0,0.3) transparent;
+  }
+  .planet-items::-webkit-scrollbar { width: 3px; }
+  .planet-items::-webkit-scrollbar-track { background: #000; }
+  .planet-items::-webkit-scrollbar-thumb { background: rgba(255,153,0,0.3); }
+
+  /* Only inserted when the list actually overflows (see the JS below) —
+     not worth the clutter for a handful of planets that already fit. */
+  .planet-search-wrap {
+    position: relative;
+    border-bottom: 1px solid rgba(255,153,0,0.15);
+  }
+  .planet-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255,153,0,0.5);
+    font-size: 11px;
+    pointer-events: none;
+    font-family: var(--mono);
+  }
+  .planet-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: #000000;
+    border: none;
+    color: #ffcc80;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 6px 24px 6px 26px;
+    outline: none;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .planet-search-input::placeholder { color: rgba(255,153,0,0.3); letter-spacing: 0.08em; }
+  .planet-search-input:focus { background: rgba(255,153,0,0.06); }
+  .planet-search-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255,153,0,0.5);
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 13px;
+    display: none;
+    line-height: 1;
+    padding: 3px;
+  }
+  .planet-search-clear:hover { color: #ffcc80; }
+  #planet-list.collapsed .planet-search-wrap { display: none; }
+  .planet-item.planet-no-match { display: none; }
   .planet-list-label {
     font-size: 8px;
     letter-spacing: 0.15em;
     color: rgba(255,153,0,0.7);
-    padding: 6px 10px 2px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    user-select: none;
   }
+  .planet-list-label:hover { color: rgba(255,153,0,0.95); }
+  .planet-list-caret {
+    display: inline-block;
+    font-size: 8px;
+    transition: transform 0.12s;
+  }
+  #planet-list.collapsed .planet-list-caret { transform: rotate(-90deg); }
+  #planet-list.collapsed .planet-items { display: none; }
   .planet-item {
     display: flex;
     align-items: center;
@@ -580,10 +696,18 @@
     padding: 10px 14px;
     font-size: 10px;
     z-index: 8;
-    display: none;
     min-width: 220px;
     backdrop-filter: blur(4px);
     clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+    pointer-events: none;
+    transition: opacity 0.18s var(--ease), transform 0.18s var(--ease);
+  }
+  #detail-panel.visible {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
   }
 
   .detail-head {
@@ -606,31 +730,53 @@
   /* ── EDIT MODAL ─────────────────────────────────────────────
      Matches the rest of the console: black panels, white brut border,
      cut corners, Orbitron/Share Tech Mono, invert-on-hover buttons. */
-  #edit-modal-backdrop {
-    display: none;
+  #edit-modal-backdrop, #category-modal-backdrop, #confirm-modal-backdrop, #color-modal-backdrop {
+    display: flex;
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.7);
     z-index: 100;
     align-items: center;
     justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s var(--ease);
   }
-  #edit-modal-backdrop.open { display: flex; }
-  #edit-modal {
+  /* Stacks above an already-open modal (e.g. the color picker opened from
+     inside the category-settings modal, or from a signal/player edit). */
+  #confirm-modal-backdrop, #color-modal-backdrop { z-index: 110; }
+  #edit-modal-backdrop.open, #category-modal-backdrop.open,
+  #confirm-modal-backdrop.open, #color-modal-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #edit-modal, #category-modal, #confirm-modal, #color-modal {
     background: var(--panel);
     border: var(--brut-border);
     padding: 18px;
     width: 280px;
     font-family: var(--mono);
     clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    transform: scale(0.94);
+    transition: transform 0.18s var(--ease);
   }
-  #edit-modal-title {
+  #category-modal { width: 340px; }
+  #confirm-modal { width: 260px; }
+  #edit-modal-backdrop.open #edit-modal, #category-modal-backdrop.open #category-modal,
+  #confirm-modal-backdrop.open #confirm-modal, #color-modal-backdrop.open #color-modal { transform: scale(1); }
+  #edit-modal-title, #category-modal-title, #confirm-modal-title, #color-modal-title {
     font-family: var(--head);
     font-size: 12px;
     letter-spacing: 0.1em;
     color: #ffffff;
     text-shadow: 0 0 8px rgba(255,255,255,0.25);
     margin-bottom: 14px;
+  }
+  #confirm-modal-message {
+    font-size: 11px;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 16px;
   }
   .edit-modal-label {
     display: block;
@@ -653,21 +799,23 @@
   #edit-name-input:focus { outline: none; border-color: #ffffff; }
 
   /* Inline Hue/Saturation/Value bars, matching Space Engineers' own GPS
-     color editor axes — no native OS/browser color-picker popup. */
-  #edit-color-picker {
+     color editor axes — no native OS/browser color-picker popup. Shared by
+     the GPS point edit modal and the standalone color-picker modal (used for
+     signal/player recoloring, category settings, and bulk recolor). */
+  #edit-color-picker, #color-modal-picker {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-bottom: 14px;
   }
-  #edit-color-preview {
+  #edit-color-preview, #color-modal-preview {
     width: 34px;
     height: 34px;
     flex-shrink: 0;
     border: 1px solid var(--border);
     background: #ffffff;
   }
-  #edit-color-sliders { flex: 1; min-width: 0; }
+  #edit-color-sliders, #color-modal-sliders { flex: 1; min-width: 0; }
   .color-slider-row {
     display: flex;
     align-items: center;
@@ -722,7 +870,7 @@
     border-radius: 0;
   }
 
-  #edit-modal-error {
+  #edit-modal-error, #category-modal-error {
     display: none;
     color: #ffffff;
     background: rgba(255,255,255,0.1);
@@ -732,11 +880,119 @@
     letter-spacing: 0.04em;
     margin: -6px 0 10px;
   }
-  #edit-modal-buttons {
+
+  /* ── CATEGORY SETTINGS MODAL ──────────────────────────────── */
+  #category-gear-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  #category-gear-btn:hover { color: #ffffff; }
+  .category-block {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .category-block:last-of-type { border-bottom: none; }
+  .category-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .category-row input[type="checkbox"] { accent-color: #ffffff; cursor: pointer; }
+  /* Last seen / trail / predict — three compact minute inputs under each
+     category's enabled+color row. Minutes, not raw seconds: the server's
+     30s floor and 30-day ceiling are awkward for a human to type in seconds
+     (e.g. "21600" for 6h), and every default value here is a clean number
+     of minutes anyway. */
+  .category-seconds-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 5px;
+    padding-left: 30px; /* aligns under the label, past checkbox+swatch */
+  }
+  .category-seconds-field { display: flex; align-items: center; gap: 4px; }
+  .category-seconds-field label {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+  }
+  .category-seconds-field input[type="number"] {
+    width: 44px;
+    background: #000000;
+    color: #ffffff;
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 4px;
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .category-seconds-field input[type="number"]:focus { outline: none; border-color: #ffffff; }
+  /* Hide the native up/down spinner arrows — these are plain minute
+     values, not something anyone increments/decrements a click at a time. */
+  .category-seconds-field input[type="number"]::-webkit-outer-spin-button,
+  .category-seconds-field input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .category-seconds-field span.unit {
+    font-size: 9px;
+    color: rgba(255,255,255,0.35);
+  }
+  /* Opens the shared #color-modal instead of a native OS color picker. */
+  .category-swatch, .pt-swatch-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--border);
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .category-swatch:hover, .pt-swatch-btn:hover { border-color: #ffffff; }
+  .category-row-label {
+    flex: 1;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.75);
+  }
+  #edit-modal-buttons, #category-modal-buttons, #confirm-modal-buttons, #color-modal-buttons {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
   }
+
+  /* ── TOAST (in-theme replacement for alert()) ─────────────────────────── */
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%) translateY(8px);
+    background: var(--panel);
+    border: var(--brut-border);
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: #ffffff;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
+    max-width: 360px;
+    text-align: center;
+  }
+  #toast.error { border-color: #ff5050; color: #ff5050; }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
   .edit-modal-btn {
     font-family: var(--mono);
     background: #000000;
@@ -748,11 +1004,13 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: all 0.08s;
+    transition: all 0.14s var(--ease);
   }
   .edit-modal-btn:hover,
   .edit-modal-btn.primary { background: #ffffff; border-color: #ffffff; color: #000000; }
   .edit-modal-btn.primary:hover { background: rgba(255,255,255,0.8); }
+  .edit-modal-btn.danger { color: #ff5050; border-color: #ff5050; margin-right: auto; }
+  .edit-modal-btn.danger:hover { background: #ff5050; border-color: #ff5050; color: #000000; }
 
   /* ── CLOCK ───────────────────────────────────────────────── */
   #clock {
@@ -823,13 +1081,20 @@
     border: 1px solid rgba(255,255,255,0.22);
     padding: 12px 18px;
     min-width: 340px;
-    display: none;
     backdrop-filter: blur(6px);
     clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
     box-shadow: 0 0 24px rgba(255,255,255,0.05);
     margin-right: 120px;
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.98);
+    pointer-events: none;
+    transition: opacity 0.18s var(--ease), transform 0.18s var(--ease);
   }
-  #dist-panel.visible { display: block; }
+  #dist-panel.visible {
+    opacity: 1;
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
 
   .dist-head {
     font-family: var(--head);
@@ -1003,7 +1268,12 @@
       <span class="bulk-label" style="color:#ff5050">THREATS &nbsp;<span id="active-hostile-count">0</span></span>
       <button class="bulk-btn" id="btn-show-all">SHOW ALL</button>
       <button class="bulk-btn" id="btn-hide-all">HIDE ALL</button>
+      <button class="bulk-btn" id="btn-bulk-recolor" style="display:none">RECOLOR SELECTED</button>
+      <button class="bulk-btn" id="btn-bulk-delete" style="display:none">DELETE SELECTED</button>
+      <button id="category-gear-btn" style="display:none" title="Signal category settings">&#9881;</button>
     </div>
+
+    <div id="signal-legend"></div>
 
     <div id="point-list"></div>
 
@@ -1158,11 +1428,77 @@
     </div>
     <div id="edit-modal-error"></div>
     <div id="edit-modal-buttons">
+      <button id="edit-delete-btn" class="edit-modal-btn danger">Delete</button>
       <button id="edit-cancel-btn" class="edit-modal-btn">Cancel</button>
       <button id="edit-save-btn" class="edit-modal-btn primary">Save</button>
     </div>
   </div>
 </div>
+
+<!-- Admin-only: enabled/color per signal category (Hostile/Neutral/Allied/
+     Owned — "unidentified" is fixed, not configurable). Opened by the gear
+     icon in #bulk-bar, only shown when LIVE.canManageCategorySettings. -->
+<div id="category-modal-backdrop">
+  <div id="category-modal">
+    <div id="category-modal-title">SIGNAL CATEGORIES</div>
+    <div id="category-rows"></div>
+    <div id="category-modal-error"></div>
+    <div id="category-modal-buttons">
+      <button id="category-cancel-btn" class="edit-modal-btn">Cancel</button>
+      <button id="category-save-btn" class="edit-modal-btn primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic in-theme confirmation dialog — replaces window.confirm(). Opened
+     via confirmDialog(message, title), which resolves true/false. -->
+<div id="confirm-modal-backdrop">
+  <div id="confirm-modal">
+    <div id="confirm-modal-title">CONFIRM</div>
+    <div id="confirm-modal-message"></div>
+    <div id="confirm-modal-buttons">
+      <button id="confirm-modal-cancel-btn" class="edit-modal-btn">Cancel</button>
+      <button id="confirm-modal-ok-btn" class="edit-modal-btn primary">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic standalone color picker (same H/S/V sliders as the GPS point
+     edit modal) — replaces <input type=color>. Opened via
+     pickColor(initialArgbColor, title), which resolves a CSS "#rrggbb"
+     string or null if cancelled. Used by signal/player recoloring, the
+     category-settings modal's swatches, and bulk recolor. -->
+<div id="color-modal-backdrop">
+  <div id="color-modal">
+    <div id="color-modal-title">CHOOSE COLOR</div>
+    <div id="color-modal-picker">
+      <div id="color-modal-preview"></div>
+      <div id="color-modal-sliders">
+        <div class="color-slider-row">
+          <span class="color-slider-label">H</span>
+          <input id="color-modal-h" class="color-slider" type="range" min="0" max="360" step="1">
+          <span class="color-slider-val" id="color-modal-h-val">0</span>
+        </div>
+        <div class="color-slider-row">
+          <span class="color-slider-label">S</span>
+          <input id="color-modal-s" class="color-slider" type="range" min="0" max="100" step="1">
+          <span class="color-slider-val" id="color-modal-s-val">0</span>
+        </div>
+        <div class="color-slider-row">
+          <span class="color-slider-label">V</span>
+          <input id="color-modal-v" class="color-slider" type="range" min="0" max="100" step="1">
+          <span class="color-slider-val" id="color-modal-v-val">0</span>
+        </div>
+      </div>
+    </div>
+    <div id="color-modal-buttons">
+      <button id="color-modal-cancel-btn" class="edit-modal-btn">Cancel</button>
+      <button id="color-modal-ok-btn" class="edit-modal-btn primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
 
 <script type="importmap">
 {
@@ -1176,6 +1512,11 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // ── DATA ──────────────────────────────────────────────────────────────────
 const POINTS = {{POINTS_JSON}};
@@ -1228,6 +1569,7 @@ const pointData = POINTS.map((p, i) => ({
   velocity: p.velocity || null,
   prediction: p.prediction || [],
   lastSeenAt: p.last_seen_at || null,
+  weaponLock: p.weapon_lock || null,
   // Dead-reckoning anchor: live players' on-screen position is extrapolated
   // from this each frame (see updateLiveDeadReckoning), not just snapped at
   // each ~3s poll — keeps the map feeling live in between updates.
@@ -1253,10 +1595,74 @@ const camera = new THREE.PerspectiveCamera(60, viewport.clientWidth / viewport.c
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
 renderer.domElement.style.width = '100%';
 renderer.domElement.style.height = '100%';
 renderer.domElement.style.display = 'block';
 viewport.appendChild(renderer.domElement);
+
+// Post-processing: UnrealBloomPass makes the glow sprites, pulse ring and
+// planet wireframes actually bloom instead of being flat-colored shapes —
+// the single highest-impact change for a "state of the art" sci-fi look.
+// Selective: the axis gizmo (lines/ticks/cones/X-Y-Z labels) is reference
+// geometry, not a marker, so it's excluded from bloom via a dedicated layer
+// rather than a luminance threshold — a pure-white line would blow out at
+// any threshold that still lets colored markers glow. Technique is the
+// standard three.js selective-bloom pattern: render only the non-excluded
+// layer through the bloom pass, then additively composite that over a
+// normal full-scene render.
+const NO_BLOOM_LAYER = 2;
+camera.layers.enable(NO_BLOOM_LAYER); // full/final render always sees it; only the bloom pass hides it
+
+const bloomComposer = new EffectComposer(renderer);
+bloomComposer.renderToScreen = false;
+bloomComposer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(viewport.clientWidth, viewport.clientHeight),
+  0.45,  // strength
+  0.45,  // radius
+  0.25,  // threshold
+);
+bloomComposer.addPass(bloomPass);
+
+const mixPass = new ShaderPass(
+  new THREE.ShaderMaterial({
+    uniforms: {
+      baseTexture: { value: null },
+      bloomTexture: { value: bloomComposer.renderTarget2.texture },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D baseTexture;
+      uniform sampler2D bloomTexture;
+      varying vec2 vUv;
+      void main() {
+        gl_FragColor = texture2D(baseTexture, vUv) + vec4(1.0) * texture2D(bloomTexture, vUv);
+      }
+    `,
+  }),
+  'baseTexture',
+);
+mixPass.needsSwap = true;
+
+const finalComposer = new EffectComposer(renderer);
+finalComposer.addPass(new RenderPass(scene, camera));
+finalComposer.addPass(mixPass);
+finalComposer.addPass(new OutputPass()); // restores correct tone mapping/color space after the bloom mix
+
+function renderScene() {
+  camera.layers.disable(NO_BLOOM_LAYER);
+  bloomComposer.render();
+  camera.layers.enable(NO_BLOOM_LAYER);
+  finalComposer.render();
+}
 
 function resizeRenderer() {
   const w = viewport.clientWidth;
@@ -1264,6 +1670,9 @@ function resizeRenderer() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
+  bloomComposer.setSize(w, h);
+  bloomPass.setSize(w, h);
+  finalComposer.setSize(w, h);
 }
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -1294,7 +1703,25 @@ controls.update();
 
 const pointSize = Math.max(span * 0.012, 1);
 
+// World coordinates here run into the millions, so the camera needs a huge
+// near/far range (see the adaptive near/far in the render loop) to avoid
+// clipping anything — but OrbitControls has no zoom-in limit by default,
+// and letting the camera-to-target distance approach exactly zero causes
+// severe depth-buffer precision loss (z-fighting) and degenerate
+// distance-based math (getPointScale, the pulse wave). This floor only
+// guards against that literal-zero case — it's a small fixed distance
+// (not tied to pointSize/span, which reflect how spread out the *whole*
+// vault is, not how close you should be able to get to any one point) so
+// zooming in stays effectively unlimited in practice.
+controls.minDistance = 0.5;
+
 // ── IMPROVED AXES ─────────────────────────────────────────────────────────
+// Reference geometry, not a marker — kept off the bloom layer (see
+// NO_BLOOM_LAYER above) so it stays crisp instead of blowing out white.
+function addNoBloom(obj) {
+  obj.layers.set(NO_BLOOM_LAYER);
+  scene.add(obj);
+}
 const axisLen = span * 1.4;
 const AXIS_DEFS = [
   { color: 0xffffff, dimColor: 0xffffff, dir: [1,0,0], label: 'X', neg: [-1,0,0] },
@@ -1308,7 +1735,7 @@ for (const ax of AXIS_DEFS) {
     new THREE.Vector3(cx, cy, cz),
     new THREE.Vector3(cx + ax.dir[0]*axisLen, cy + ax.dir[1]*axisLen, cz + ax.dir[2]*axisLen),
   ]);
-  scene.add(new THREE.Line(posGeom, posMat));
+  addNoBloom(new THREE.Line(posGeom, posMat));
 
   const negMat = new THREE.LineBasicMaterial({ color: ax.dimColor, transparent: true, opacity: 0.25 });
   const SEGS = 12;
@@ -1322,7 +1749,7 @@ for (const ax of AXIS_DEFS) {
     );
   }
   const negGeom = new THREE.BufferGeometry().setFromPoints(negPts);
-  scene.add(new THREE.LineSegments(negGeom, negMat));
+  addNoBloom(new THREE.LineSegments(negGeom, negMat));
 
   const TICKS = 5;
   const tickPts = [];
@@ -1338,7 +1765,7 @@ for (const ax of AXIS_DEFS) {
   }
   const tickMat = new THREE.LineBasicMaterial({ color: ax.color, transparent: true, opacity: 0.55 });
   const tickGeom = new THREE.BufferGeometry().setFromPoints(tickPts);
-  scene.add(new THREE.LineSegments(tickGeom, tickMat));
+  addNoBloom(new THREE.LineSegments(tickGeom, tickMat));
 
   const coneH = axisLen * 0.04;
   const coneR = axisLen * 0.008;
@@ -1349,7 +1776,7 @@ for (const ax of AXIS_DEFS) {
   cone.position.copy(tip);
   if (ax.label === 'X') cone.rotation.z = -Math.PI / 2;
   else if (ax.label === 'Z') cone.rotation.x = Math.PI / 2;
-  scene.add(cone);
+  addNoBloom(cone);
 
   const labelCanvas = document.createElement('canvas');
   labelCanvas.width = 64; labelCanvas.height = 64;
@@ -1370,7 +1797,7 @@ for (const ax of AXIS_DEFS) {
   );
   labelSprite.position.copy(labelPos);
   labelSprite.scale.set(axisLen * 0.08, axisLen * 0.08, 1);
-  scene.add(labelSprite);
+  addNoBloom(labelSprite);
 }
 
 // origin marker removed — was causing phantom circle
@@ -1393,11 +1820,19 @@ const glowTex = new THREE.CanvasTexture(glowCanvas);
 const meshes = [];
 const glows = [];
 
+// Kept deliberately subdued: points are the densest thing on the map (dozens
+// to hundreds at once), so a bright/bloomy default per-point quickly turns
+// into visual noise. Planets are rare (a handful per world) and meant to
+// read as a bigger, brighter presence — see PLANET_GLOW_OPACITY below.
+const POINT_MESH_DIM = 0.55;  // solid-dot color multiplier
+const GLOW_BASE_OPACITY = 0.12; // ambient glow halo opacity (was 0.35)
+const GLOW_SCALE = 5; // ambient glow halo size, in point-radii (was 8)
+
 // Shared sphere geometry (unit size — we scale via mesh.scale)
 const unitSphereGeom = new THREE.SphereGeometry(1, 14, 10);
 
 function createPointVisual(p) {
-  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(p.color) });
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(p.color).multiplyScalar(POINT_MESH_DIM) });
   const m = new THREE.Mesh(unitSphereGeom, mat);
   m.position.set(p.x, p.y, p.z);
   m.scale.setScalar(BASE_POINT_SIZE);
@@ -1408,13 +1843,13 @@ function createPointVisual(p) {
     map: glowTex,
     color: new THREE.Color(p.color),
     transparent: true,
-    opacity: 0.35,
+    opacity: GLOW_BASE_OPACITY,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
   const sprite = new THREE.Sprite(glowMat);
   sprite.position.set(p.x, p.y, p.z);
-  sprite.scale.set(BASE_POINT_SIZE * 8, BASE_POINT_SIZE * 8, 1);
+  sprite.scale.set(BASE_POINT_SIZE * GLOW_SCALE, BASE_POINT_SIZE * GLOW_SCALE, 1);
   scene.add(sprite);
 
   return { mesh: m, glow: sprite };
@@ -1458,17 +1893,34 @@ function makePlanetLabelSprite(text, worldSize) {
 const PLANET_COLOR = 0xff9900;
 
 for (const planet of PLANETS) {
+  planet.worldPos = new THREE.Vector3(planet.x, planet.y, planet.z); // cached for the render loop's far-plane check
   const wireGeom = new THREE.SphereGeometry(planet.radius, 20, 14);
   const wireMat = new THREE.MeshBasicMaterial({
     color: PLANET_COLOR,
     wireframe: true,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.6, // a little brighter than before — planets are rare, meant to stand out more than the (deliberately subdued) GPS points
     depthWrite: false,
   });
   const wireMesh = new THREE.Mesh(wireGeom, wireMat);
   wireMesh.position.set(planet.x, planet.y, planet.z);
   scene.add(wireMesh);
+
+  // Soft ambient halo, same technique as the point glow sprites — a bare
+  // wireframe barely covers enough pixels to bloom on its own, so this gives
+  // the planet the brighter, more substantial presence it's meant to have.
+  const planetGlowMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    color: new THREE.Color(PLANET_COLOR),
+    transparent: true,
+    opacity: 0.15,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const planetGlow = new THREE.Sprite(planetGlowMat);
+  planetGlow.position.set(planet.x, planet.y, planet.z);
+  planetGlow.scale.set(planet.radius * 1.6, planet.radius * 1.6, 1);
+  scene.add(planetGlow);
 
   const label = makePlanetLabelSprite(planet.name, planet.radius * 0.6);
   label.position.set(planet.x, planet.y + planet.radius * 1.15, planet.z);
@@ -1530,12 +1982,63 @@ for (let i = 0; i < pointData.length; i++) {
 // velocity + acceleration (basic kinematics) — a short-horizon "where
 // they're likely headed" forecast, visually distinct from the solid trail.
 const predictionLines = [];
-const DASH_SIZE = Math.max(span * 0.01, 0.5);
+
+// Dashes per prediction line, and a floor so a near-zero-length line (two
+// almost-coincident points) doesn't divide down to a degenerate dash size.
+const PREDICTION_DASH_COUNT = 20;
+const MIN_DASH_SIZE = 0.5;
+
+const PREDICTION_MIN_SPEED = 20; // m/s — don't draw a projected route for anything this slow (drifting wreckage, parked ships, etc.)
 
 function buildPredictionLine(p) {
   if (!p.prediction || p.prediction.length < 2) return null;
+  if (!p.velocity || p.velocity.speed < PREDICTION_MIN_SPEED) return null;
 
-  const vertices = [[p.x, p.y, p.z], ...p.prediction];
+  const rawVertices = [[p.x, p.y, p.z], ...p.prediction];
+
+  // Dash size scaled to THIS line's own length, not the whole scene's span
+  // (framingPoints can include something far away — a planet, a distant
+  // signal — inflating a scene-wide dash size well past the length of a
+  // short, nearby predicted path, which then renders as one solid segment
+  // instead of dashes: exactly the "not dashed" symptom this fixes).
+  let lineLength = 0;
+  for (let i = 1; i < rawVertices.length; i++) {
+    lineLength += Math.hypot(
+      rawVertices[i][0] - rawVertices[i - 1][0],
+      rawVertices[i][1] - rawVertices[i - 1][1],
+      rawVertices[i][2] - rawVertices[i - 1][2]
+    );
+  }
+  const dashSize = Math.max(lineLength / PREDICTION_DASH_COUNT, MIN_DASH_SIZE);
+
+  // THREE's LineDashedMaterial interpolates the dash pattern linearly in
+  // screen space per segment, not perspective-corrected — fine for short
+  // segments, but a prediction line is usually just 2-5 long straight legs
+  // stretching away from the ship into the distance. Viewed up close (zoomed
+  // in near one end), that visibly distorts the pattern: stretched into one
+  // long gap ("missing") near the camera, crushed into sub-pixel gaps
+  // ("solid") further out. Subdividing each leg so no piece is longer than a
+  // fraction of a dash confines that interpolation error to well under one
+  // dash width, keeping the dashes looking consistent at any zoom level.
+  // Bounded cost: subdivisions are sized relative to this line's own total
+  // length, so the vertex count stays ~constant regardless of world scale.
+  const maxSegmentLength = dashSize / 4;
+  const vertices = [rawVertices[0]];
+  for (let i = 1; i < rawVertices.length; i++) {
+    const a = rawVertices[i - 1];
+    const b = rawVertices[i];
+    const segLength = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    const steps = Math.max(1, Math.ceil(segLength / maxSegmentLength));
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      vertices.push([
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+      ]);
+    }
+  }
+
   const positions = new Float32Array(vertices.length * 3);
   for (let i = 0; i < vertices.length; i++) {
     positions[i * 3] = vertices[i][0];
@@ -1545,13 +2048,24 @@ function buildPredictionLine(p) {
 
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
   const mat = new THREE.LineDashedMaterial({
     color: new THREE.Color(p.color),
-    dashSize: DASH_SIZE,
-    gapSize: DASH_SIZE * 0.6,
+    dashSize: dashSize,
+    gapSize: dashSize * 0.6,
     transparent: true,
     opacity: 0.55,
   });
+  // dashSize/gapSize are in world units and fixed at build time — great for
+  // giving the FULL line a consistent dash count when viewed from its
+  // "natural" distance, but zoom the camera in close and that same
+  // world-space dash length now covers most/all of what's visible on
+  // screen, so the pattern looks like one flat color instead of dashes. The
+  // render loop rescales dashSize/gapSize every frame by the same
+  // distance-based factor used for point/glow sizing (getPointScale), so a
+  // dash keeps roughly the same on-screen size at any zoom level instead of
+  // growing with it. baseDashSize is what that rescale multiplies from.
+  mat.userData.baseDashSize = dashSize;
   const line = new THREE.Line(geom, mat);
   line.computeLineDistances(); // required for dashes to render
   scene.add(line);
@@ -1572,12 +2086,56 @@ for (let i = 0; i < pointData.length; i++) {
   predictionLines.push(buildPredictionLine(pointData[i]));
 }
 
+// ── WEAPON LOCK ────────────────────────────────────────────────────────────
+// A solid line from a live player straight to whatever their own weapon
+// (e.g. a lock-on rocket launcher) currently has locked — reported by the
+// plugin's MyTargetLockingComponent read, not anything derived here. The
+// target is a bare world coordinate, not necessarily any other tracked
+// point on the map. Visually distinct from both the trail (fading, own
+// color) and the prediction (dashed forecast) — solid and urgent-red, since
+// an active lock is a more pressing signal than a movement forecast.
+const lockLines = [];
+const LOCK_LINE_COLOR = 0xff2020;
+
+function buildLockLine(p) {
+  if (!p.weaponLock) return null;
+
+  const positions = new Float32Array([
+    p.x, p.y, p.z,
+    p.weaponLock.x, p.weaponLock.y, p.weaponLock.z,
+  ]);
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({ color: LOCK_LINE_COLOR, transparent: true, opacity: 0.8 });
+  const line = new THREE.Line(geom, mat);
+  scene.add(line);
+  return line;
+}
+
+function updateLockLine(idx) {
+  if (lockLines[idx]) {
+    scene.remove(lockLines[idx]);
+    lockLines[idx].geometry.dispose();
+    lockLines[idx].material.dispose();
+    lockLines[idx] = null;
+  }
+  lockLines[idx] = buildLockLine(pointData[idx]);
+}
+
+for (let i = 0; i < pointData.length; i++) {
+  lockLines.push(buildLockLine(pointData[i]));
+}
+
 // ── PULSE WAVE ────────────────────────────────────────────────────────────
-// Pulse wave: 5km → 1000km, slow, hits other points and briefly flashes them
+// Pulse wave: expands from the active point, hits other points and briefly
+// flashes them. Sized purely as a fraction of camera distance (no fixed-km
+// floor) so it keeps shrinking the closer you zoom in, instead of stalling
+// at a fixed real-world radius that either dwarfs the view or falls outside
+// the near/far frustum entirely once you're zoomed in tight.
 let pulseRing = null;
 let pulseT = 0;
-const PULSE_MIN_KM = 5;
-const PULSE_MAX_KM = 1000;
+const PULSE_MIN_FRAC = 0.02; // ring starts at 2% of camera distance
+const PULSE_MAX_FRAC = 0.3;  // and expands out to 30%
 const PULSE_SPEED = 0.0008; // ~1250 frames per cycle (~21s at 60fps)
 
 // Hit flash state: pointIdx -> { timer }
@@ -1596,12 +2154,16 @@ function updatePulseWave() {
   const center = new THREE.Vector3(p.x, p.y, p.z);
   const camDir = camera.position.clone().sub(center).normalize();
 
-  // Scale max radius with camera distance so ring expands slower when zoomed in
-  const camDistKm = camera.position.distanceTo(center) / 1000;
-  const dynamicMaxKm = Math.max(PULSE_MIN_KM * 3, camDistKm * 0.3);
+  // Both bounds scale purely off current camera distance — no fixed-km
+  // floor — so the ring keeps shrinking continuously the closer you zoom in,
+  // instead of stalling at a fixed real-world size once you're closer than
+  // that floor would allow.
+  const camDist = camera.position.distanceTo(center);
+  const minM = camDist * PULSE_MIN_FRAC;
+  const maxM = camDist * PULSE_MAX_FRAC;
 
   // Linear expansion, fade out in the outer 30%
-  const radiusM = (PULSE_MIN_KM + pulseT * (dynamicMaxKm - PULSE_MIN_KM)) * 1000;
+  const radiusM = minM + pulseT * (maxM - minM);
   const fadeStart = 0.7;
   const opacity = pulseT < fadeStart
     ? 0.85
@@ -1614,7 +2176,7 @@ function updatePulseWave() {
   scene.add(pulseRing);
 
   // Hit detection — 2-frame tolerance window
-  const tolerance = (dynamicMaxKm - PULSE_MIN_KM) * 1000 * 2 / GLOW_PERIOD;
+  const tolerance = (maxM - minM) * 2 / GLOW_PERIOD;
   for (let j = 0; j < pointData.length; j++) {
     if (j === activeIdx || pointData[j].hidden) continue;
     const ptPos = new THREE.Vector3(pointData[j].x, pointData[j].y, pointData[j].z);
@@ -1628,14 +2190,15 @@ function updatePulseWave() {
   for (const [j, flash] of hitFlashes) {
     flash.timer--;
     const t = flash.timer / HIT_FLASH_DURATION;
-    const orig = new THREE.Color(pointData[j].color);
-    meshes[j].material.color.lerpColors(orig, pulseColor, t);
-    glows[j].material.color.lerpColors(orig, pulseColor, t);
-    glows[j].material.opacity = 0.35 + t * 0.65;
+    const meshOrig = new THREE.Color(pointData[j].color).multiplyScalar(POINT_MESH_DIM);
+    const glowOrig = new THREE.Color(pointData[j].color);
+    meshes[j].material.color.lerpColors(meshOrig, pulseColor, t);
+    glows[j].material.color.lerpColors(glowOrig, pulseColor, t);
+    glows[j].material.opacity = GLOW_BASE_OPACITY + t * (1 - GLOW_BASE_OPACITY);
     if (flash.timer <= 0) {
-      meshes[j].material.color.set(pointData[j].color);
-      glows[j].material.color.set(pointData[j].color);
-      glows[j].material.opacity = 0.35;
+      meshes[j].material.color.copy(meshOrig);
+      glows[j].material.color.copy(glowOrig);
+      glows[j].material.opacity = GLOW_BASE_OPACITY;
       hitFlashes.delete(j);
     }
   }
@@ -1653,6 +2216,57 @@ function getPointScale(distToCamera) {
 let activeIdx = null;
 let currentFilter = 'all';
 let searchQuery = '';
+
+// Signal category legend/filter — colors match GameStateReader.ClassifyRelation
+// on the plugin side (ARGB, alpha byte stripped for CSS). Independent of
+// currentFilter (which is single-select and drives the sidebar list): these
+// are per-category on/off toggles that only affect ⚠-prefixed signal
+// markers' scene visibility (mesh/glow/trail/prediction), see updateVisibility.
+const SIGNAL_CATEGORIES = [
+  { key: 'unidentified', label: 'UNIDENTIFIED', color: '#EDAA38' },
+  { key: 'neutral',      label: 'NEUTRAL',      color: '#FFCF00' },
+  { key: 'allied',       label: 'ALLIED',       color: '#00FF0E' },
+  { key: 'enemy',        label: 'HOSTILE',      color: '#FF3030' },
+  { key: 'owned',        label: 'OWNED',        color: '#3080FF' },
+];
+const categoryVisible = { unidentified: true, neutral: true, allied: true, enemy: true, owned: true };
+
+// The categories an admin can enable/disable, recolor, and set last-seen/
+// trail/prediction durations for, server-side (see /map/category_settings).
+// Keys/order match VectorHandler.py's CATEGORY_SETTING_DEFAULTS. "player"
+// governs live position markers (◆ prefix) rather than a hostile-signal
+// category — same settings API either way. "unidentified" used to be a
+// fixed, non-configurable noise filter; it's a normal category now too.
+const MANAGEABLE_CATEGORIES = [
+  { key: 'unidentified', label: 'UNIDENTIFIED' },
+  { key: 'enemy',         label: 'HOSTILE' },
+  { key: 'neutral',       label: 'NEUTRAL' },
+  { key: 'allied',        label: 'ALLIED' },
+  { key: 'owned',         label: 'OWNED' },
+  { key: 'player',        label: 'PLAYER' },
+];
+
+// Server range for retention_seconds/trail_seconds/prediction_seconds (see
+// MIN_CATEGORY_RETENTION_SECONDS/MAX_CATEGORY_RETENTION_SECONDS in
+// VectorHandler.py) — enforced here too so a bad value gets a same-panel
+// error instead of a round trip to the server just to fail.
+const CATEGORY_SECONDS_MIN = 30;
+const CATEGORY_SECONDS_MAX = 30 * 24 * 3600;
+const CATEGORY_SECONDS_FIELDS = [
+  { key: 'retention_seconds',  label: 'LAST SEEN' },
+  { key: 'trail_seconds',      label: 'TRAIL' },
+  { key: 'prediction_seconds', label: 'PREDICT' },
+];
+
+// ARGB '#AARRGGBB' <-> CSS '#RRGGBB' (an <input type=color> only accepts the
+// latter) — mirrors VectorHandler.py's argb_to_css_hex/normalize_argb_hex.
+function argbToCss(argb) {
+  const c = (argb || '#FFFFFFFF').replace('#', '');
+  return '#' + (c.length === 8 ? c.slice(2) : c).toLowerCase();
+}
+function cssToArgb(css) {
+  return '#FF' + css.replace('#', '').toUpperCase();
+}
 
 // ── MULTI-SELECT (Ctrl+click toggles, Shift+click selects a range) ────────
 // `activeIdx` stays the single "primary" selection driving the detail panel
@@ -1683,7 +2297,7 @@ function clearSelection() {
   document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
   activeIdx = null;
   hitFlashes.clear();
-  document.getElementById('detail-panel').style.display = 'none';
+  document.getElementById('detail-panel').classList.remove('visible');
   updateSelectionHud();
 }
 
@@ -1706,7 +2320,7 @@ function toggleSelection(i) {
         document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
         activeIdx = null;
         hitFlashes.clear();
-        document.getElementById('detail-panel').style.display = 'none';
+        document.getElementById('detail-panel').classList.remove('visible');
       }
     }
   } else {
@@ -1743,7 +2357,14 @@ function updateVisibility() {
     else if (currentFilter.startsWith('tag:')) filterMatch = p.tag === currentFilter.slice(4);
     else if (currentFilter !== 'all') filterMatch = p.tag === currentFilter;
 
-    const listMatch = searchMatch && filterMatch;
+    // A signal marker whose category checkbox is unticked in #signal-legend
+    // hides the same way a manually-hidden point does, but independently —
+    // it doesn't touch p.hidden (so unticking/reticking a category never
+    // disturbs the player's own manual show/hide choices). Folded into
+    // listMatch too, so the sidebar row disappears along with the 3D marker
+    // instead of only the scene object.
+    const catHidden = !!(p.category && categoryVisible[p.category] === false);
+    const listMatch = searchMatch && filterMatch && !catHidden;
 
     const item = document.querySelector(`.point-item[data-idx="${i}"]`);
     if (item) {
@@ -1751,8 +2372,13 @@ function updateVisibility() {
       item.classList.toggle('hidden-pt', p.hidden);
     }
 
-    meshes[i].visible = !p.hidden;
-    glows[i].visible = !p.hidden;
+    const sceneVisible = !p.hidden && !catHidden;
+
+    meshes[i].visible = sceneVisible;
+    glows[i].visible = sceneVisible;
+    if (trailLines[i]) trailLines[i].visible = sceneVisible;
+    if (predictionLines[i]) predictionLines[i].visible = sceneVisible;
+    if (lockLines[i]) lockLines[i].visible = sceneVisible;
 
     if (!p.hidden) vis++; else hid++;
     if (listMatch) match++;
@@ -1775,10 +2401,16 @@ function updateVisibility() {
 {
   const planetListEl = document.getElementById('planet-list');
   if (PLANETS.length) {
+    const PLANETS_COLLAPSED_KEY = 'gpsvault.planetsCollapsed';
+
     const label = document.createElement('div');
     label.className = 'planet-list-label';
-    label.textContent = 'PLANETS';
+    label.innerHTML = `<span class="planet-list-caret">▾</span><span>PLANETS</span>`;
     planetListEl.appendChild(label);
+
+    const itemsWrap = document.createElement('div');
+    itemsWrap.className = 'planet-items';
+    planetListEl.appendChild(itemsWrap);
 
     for (const planet of PLANETS) {
       const item = document.createElement('div');
@@ -1802,8 +2434,51 @@ function updateVisibility() {
       });
 
       item.addEventListener('click', () => panCameraTo(planet.x, planet.y, planet.z));
-      planetListEl.appendChild(item);
+      itemsWrap.appendChild(item);
     }
+
+    // Only worth a filter box once the list actually needs to scroll — must
+    // be measured before the collapsed class (below) is applied, since a
+    // collapsed .planet-items is display:none and would measure as 0-height.
+    if (itemsWrap.scrollHeight > itemsWrap.clientHeight) {
+      const searchWrap = document.createElement('div');
+      searchWrap.className = 'planet-search-wrap';
+      searchWrap.innerHTML = `
+        <span class="planet-search-icon">⌕</span>
+        <input class="planet-search-input" type="text" placeholder="FILTER PLANETS..." autocomplete="off" spellcheck="false" />
+        <button class="planet-search-clear">×</button>
+      `;
+      planetListEl.insertBefore(searchWrap, itemsWrap);
+
+      const planetSearchInput = searchWrap.querySelector('.planet-search-input');
+      const planetSearchClear = searchWrap.querySelector('.planet-search-clear');
+      const planetItems = [...itemsWrap.querySelectorAll('.planet-item')];
+
+      const applyPlanetFilter = () => {
+        const q = planetSearchInput.value.trim().toLowerCase();
+        planetSearchClear.style.display = q ? 'block' : 'none';
+        for (const item of planetItems) {
+          const name = item.querySelector('.planet-name').textContent.toLowerCase();
+          item.classList.toggle('planet-no-match', !!q && !name.includes(q));
+        }
+      };
+      planetSearchInput.addEventListener('input', applyPlanetFilter);
+      planetSearchClear.addEventListener('click', () => {
+        planetSearchInput.value = '';
+        applyPlanetFilter();
+        planetSearchInput.focus();
+      });
+    }
+
+    // Collapsed state persists per-browser so it doesn't reset on every page load.
+    let collapsed = false;
+    try { collapsed = localStorage.getItem(PLANETS_COLLAPSED_KEY) === '1'; } catch {}
+    planetListEl.classList.toggle('collapsed', collapsed);
+
+    label.addEventListener('click', () => {
+      const isCollapsed = planetListEl.classList.toggle('collapsed');
+      try { localStorage.setItem(PLANETS_COLLAPSED_KEY, isCollapsed ? '1' : '0'); } catch {}
+    });
   }
 }
 
@@ -1877,6 +2552,9 @@ function createListItem(p, i) {
   });
   item.appendChild(visBtn);
 
+  const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
+  const isPlayer = p.name.startsWith(PLAYER_MARKER_PREFIX);
+
   if (LIVE && !p.velocity) {
     const editBtn = document.createElement('button');
     editBtn.className = 'pt-focus'; // reuse the same button styling as focus/visibility
@@ -1887,6 +2565,41 @@ function createListItem(p, i) {
       openEditModal(i);
     });
     item.appendChild(editBtn);
+  } else if (LIVE && isPlayer) {
+    // Live player markers can't be renamed (the name is the player's own
+    // name), only recolored — a dedicated color-only editor rather than
+    // reusing the name+color edit modal.
+    const recolorBtn = document.createElement('button');
+    recolorBtn.className = 'pt-focus';
+    recolorBtn.textContent = '✎';
+    recolorBtn.title = 'Recolor';
+    recolorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      editPlayerColor(i);
+    });
+    item.appendChild(recolorBtn);
+  }
+
+  if (LIVE && isSignal) {
+    const recolorBtn = document.createElement('button');
+    recolorBtn.className = 'pt-focus';
+    recolorBtn.textContent = '✎';
+    recolorBtn.title = 'Recolor';
+    recolorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      editSignalColor(i);
+    });
+    item.appendChild(recolorBtn);
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'pt-focus'; // reuse the same button styling as focus/visibility
+    dismissBtn.textContent = '✕';
+    dismissBtn.title = 'Dismiss signal';
+    dismissBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismissSignal(i);
+    });
+    item.appendChild(dismissBtn);
   }
 
   // Shift-click normally extends a text selection starting at mousedown,
@@ -2069,7 +2782,7 @@ function selectPoint(i) {
   document.getElementById('hud-active').textContent = p.name;
 
   const dp = document.getElementById('detail-panel');
-  dp.style.display = 'block';
+  dp.classList.add('visible');
   document.getElementById('detail-name').textContent = p.name;
   document.getElementById('detail-x').textContent = p.x.toFixed(3);
   document.getElementById('detail-y').textContent = p.y.toFixed(3);
@@ -2144,6 +2857,30 @@ function updateLastSeenDisplays() {
   }
 }
 
+// A live player's own weapon-lock status, shown as a small sidebar row —
+// same lazy-create-on-demand idiom as updateLastSeenDisplays above (a point
+// may not have had a lock yet when its sidebar item was first built).
+function updateLockDisplays() {
+  for (const p of pointData) {
+    let el = document.getElementById(`lock-${p.id}`);
+    if (!p.weaponLock) {
+      if (el) el.remove();
+      continue;
+    }
+
+    const text = `\u{1F512} Locked: ${p.weaponLock.target_name || 'Unknown'} (${Math.round(p.weaponLock.distance)}m)`;
+    if (!el) {
+      const item = document.querySelector(`.point-item[data-idx="${p.id}"] .pt-info`);
+      if (!item) continue;
+      el = document.createElement('div');
+      el.className = 'pt-lock';
+      el.id = `lock-${p.id}`;
+      item.appendChild(el);
+    }
+    el.textContent = text;
+  }
+}
+
 // ── ACTIVE PLAYER COUNT ───────────────────────────────────────────────────
 const ACTIVE_PLAYER_WINDOW_SECONDS = 300; // 5 minutes
 
@@ -2161,6 +2898,7 @@ function updateActivePlayerCount() {
 }
 
 updateLastSeenDisplays();
+updateLockDisplays();
 updateActivePlayerCount();
 setInterval(() => {
   updateLastSeenDisplays();
@@ -2280,6 +3018,224 @@ searchClear.addEventListener('click', () => {
   }
 }
 
+// ── INJECT SIGNAL CATEGORY LEGEND/FILTER ─────────────────────────────────
+// One checkbox per category actually present at load — same "only show
+// what's there" approach as the type/tag buttons above. A category that
+// only starts appearing later (via live polling) won't get a checkbox until
+// the page is reloaded, matching that same pre-existing limitation.
+{
+  const legend = document.getElementById('signal-legend');
+  const seenCategories = new Set(pointData.map(p => p.category).filter(Boolean));
+
+  if (seenCategories.size > 0) {
+    legend.classList.add('visible');
+    for (const cat of SIGNAL_CATEGORIES) {
+      if (!seenCategories.has(cat.key)) continue;
+
+      const item = document.createElement('label');
+      item.className = 'legend-item';
+      item.style.color = cat.color;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = true;
+      checkbox.addEventListener('change', () => {
+        categoryVisible[cat.key] = checkbox.checked;
+        updateVisibility();
+      });
+
+      const swatch = document.createElement('span');
+      swatch.className = 'legend-swatch';
+      swatch.style.background = cat.color;
+
+      item.dataset.cat = cat.key;
+      item.appendChild(checkbox);
+      item.appendChild(swatch);
+      item.appendChild(document.createTextNode(cat.label));
+      legend.appendChild(item);
+    }
+  }
+}
+
+// ── SIGNAL CATEGORY SETTINGS (admin gear icon) ───────────────────────────
+// Server-authoritative enabled/color per category (Hostile/Neutral/Allied/
+// Owned) — distinct from the per-viewer categoryVisible legend checkboxes
+// above. Gear only shown to viewers LIVE.canManageCategorySettings; the
+// server re-checks that permission on every save regardless.
+if (LIVE && LIVE.canManageCategorySettings) {
+  document.getElementById('category-gear-btn').style.display = '';
+}
+
+function applyCategoryColor(key, cssColor) {
+  const cat = SIGNAL_CATEGORIES.find(c => c.key === key);
+  if (cat) cat.color = cssColor;
+  const item = document.querySelector(`.legend-item[data-cat="${key}"]`);
+  if (item) {
+    item.style.color = cssColor;
+    const swatch = item.querySelector('.legend-swatch');
+    if (swatch) swatch.style.background = cssColor;
+  }
+}
+
+async function openCategoryModal() {
+  const errorEl = document.getElementById('category-modal-error');
+  errorEl.style.display = 'none';
+  const rowsEl = document.getElementById('category-rows');
+  rowsEl.innerHTML = 'Loading…';
+  document.getElementById('category-modal-backdrop').classList.add('open');
+
+  let data;
+  try {
+    const res = await fetch(`/map/category_settings?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}`);
+    if (!res.ok) throw new Error('request failed');
+    data = await res.json();
+  } catch (e) {
+    rowsEl.innerHTML = '';
+    errorEl.textContent = 'Failed to load settings — try again.';
+    errorEl.style.display = '';
+    return;
+  }
+
+  rowsEl.innerHTML = '';
+  for (const cat of MANAGEABLE_CATEGORIES) {
+    const setting = data.categories[cat.key] || {
+      enabled: true, color: '#FFFFFFFF',
+      retention_seconds: 21600, trail_seconds: 600, prediction_seconds: 600,
+    };
+
+    const block = document.createElement('div');
+    block.className = 'category-block';
+    block.dataset.cat = cat.key;
+
+    const row = document.createElement('div');
+    row.className = 'category-row';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = !!setting.enabled;
+    checkbox.className = 'category-enabled';
+
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'category-swatch';
+    const cssColor = argbToCss(setting.color);
+    swatch.dataset.color = cssColor;
+    swatch.style.background = cssColor;
+    swatch.title = 'Change color';
+    swatch.addEventListener('click', async () => {
+      const picked = await pickColor(swatch.dataset.color, `${cat.label} color`);
+      if (picked) {
+        swatch.dataset.color = picked;
+        swatch.style.background = picked;
+      }
+    });
+
+    const label = document.createElement('span');
+    label.className = 'category-row-label';
+    label.textContent = cat.label;
+
+    row.appendChild(checkbox);
+    row.appendChild(swatch);
+    row.appendChild(label);
+    block.appendChild(row);
+
+    // Last seen / trail / predict, in minutes (server stores seconds — see
+    // CATEGORY_SECONDS_FIELDS/CATEGORY_SECONDS_MIN/MAX above).
+    const secondsRow = document.createElement('div');
+    secondsRow.className = 'category-seconds-row';
+    for (const field of CATEGORY_SECONDS_FIELDS) {
+      const wrap = document.createElement('div');
+      wrap.className = 'category-seconds-field';
+
+      const flabel = document.createElement('label');
+      flabel.textContent = field.label;
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = String(CATEGORY_SECONDS_MIN / 60);
+      input.max = String(CATEGORY_SECONDS_MAX / 60);
+      input.step = '0.5';
+      input.className = `category-${field.key}`;
+      input.value = String(setting[field.key] / 60);
+
+      const unit = document.createElement('span');
+      unit.className = 'unit';
+      unit.textContent = 'min';
+
+      wrap.appendChild(flabel);
+      wrap.appendChild(input);
+      wrap.appendChild(unit);
+      secondsRow.appendChild(wrap);
+    }
+    block.appendChild(secondsRow);
+
+    rowsEl.appendChild(block);
+  }
+}
+
+function closeCategoryModal() {
+  document.getElementById('category-modal-backdrop').classList.remove('open');
+}
+
+async function saveCategorySettings() {
+  const errorEl = document.getElementById('category-modal-error');
+  errorEl.style.display = 'none';
+
+  const blocks = [...document.querySelectorAll('#category-rows .category-block')];
+  const settings = [];
+  for (const block of blocks) {
+    const entry = {
+      category: block.dataset.cat,
+      enabled: block.querySelector('.category-enabled').checked,
+      color: cssToArgb(block.querySelector('.category-swatch').dataset.color),
+    };
+    for (const field of CATEGORY_SECONDS_FIELDS) {
+      const input = block.querySelector(`.category-${field.key}`);
+      const minutes = parseFloat(input.value);
+      const seconds = Math.round(minutes * 60);
+      if (!Number.isFinite(minutes) || seconds < CATEGORY_SECONDS_MIN || seconds > CATEGORY_SECONDS_MAX) {
+        errorEl.textContent =
+          `${block.querySelector('.category-row-label').textContent} ${field.label.toLowerCase()} must be between ` +
+          `${CATEGORY_SECONDS_MIN / 60} and ${CATEGORY_SECONDS_MAX / 60} minutes.`;
+        errorEl.style.display = '';
+        return;
+      }
+      entry[field.key] = seconds;
+    }
+    settings.push(entry);
+  }
+
+  let response;
+  try {
+    response = await fetch('/map/category_settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guild_id: LIVE.guildId, channel_id: LIVE.channelId, settings }),
+    });
+  } catch (e) {
+    errorEl.textContent = 'Network error — try again.';
+    errorEl.style.display = '';
+    return;
+  }
+
+  if (!response.ok) {
+    errorEl.textContent = 'Save failed — you may not have permission for this channel.';
+    errorEl.style.display = '';
+    return;
+  }
+
+  for (const s of settings) applyCategoryColor(s.category, argbToCss(s.color));
+  closeCategoryModal();
+  pollLiveData(); // pick up newly enabled/disabled/recolored signals immediately
+}
+
+document.getElementById('category-gear-btn').addEventListener('click', openCategoryModal);
+document.getElementById('category-cancel-btn').addEventListener('click', closeCategoryModal);
+document.getElementById('category-save-btn').addEventListener('click', saveCategorySettings);
+document.getElementById('category-modal-backdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'category-modal-backdrop') closeCategoryModal();
+});
+
 // ── FILTER BUTTONS ───────────────────────────────────────────────────────
 document.getElementById('filter-bar').addEventListener('click', (e) => {
   const btn = e.target.closest('.filter-btn');
@@ -2306,6 +3262,11 @@ function updateBulkButtonLabels() {
   const scoped = selectedIndices.size > 1;
   document.getElementById('btn-show-all').textContent = scoped ? 'SHOW SELECTED' : 'SHOW ALL';
   document.getElementById('btn-hide-all').textContent = scoped ? 'HIDE SELECTED' : 'HIDE ALL';
+  // Recolor/delete only make sense against an actual multi-selection (never
+  // "every point on the map") and only in the live editable view.
+  const showBulkEdit = !!LIVE && scoped;
+  document.getElementById('btn-bulk-recolor').style.display = showBulkEdit ? '' : 'none';
+  document.getElementById('btn-bulk-delete').style.display = showBulkEdit ? '' : 'none';
 }
 
 document.getElementById('btn-show-all').addEventListener('click', () => {
@@ -2318,6 +3279,85 @@ document.getElementById('btn-hide-all').addEventListener('click', () => {
   const targets = selectedIndices.size > 1 ? selectedIndices : pointData.map((_, i) => i);
   for (const i of targets) setPointHidden(i, true);
   updateVisibility();
+});
+
+// Bulk recolor: vault points and live player markers both go through
+// /map/edit_point with the name unchanged (recolor-only); signals have
+// their own /map/edit_signal_color (no name at all). Requests run in
+// parallel — this is a UI convenience over N single-item edits, not a new
+// server-side bulk endpoint.
+document.getElementById('btn-bulk-recolor').addEventListener('click', async () => {
+  const targets = [...selectedIndices];
+  if (!targets.length) return;
+
+  const picked = await pickColor(pointData[targets[0]].color, `Recolor ${targets.length} selected`);
+  if (!picked) return;
+
+  const results = await Promise.all(targets.map(async (idx) => {
+    const p = pointData[idx];
+    const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
+    try {
+      const response = await fetch(isSignal ? '/map/edit_signal_color' : '/map/edit_point', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isSignal
+          ? { guild_id: LIVE.guildId, channel_id: LIVE.channelId, signal_id: p.signal_id, color: picked }
+          : { guild_id: LIVE.guildId, channel_id: LIVE.channelId, old_name: p.name, new_name: p.name, color: picked }),
+      });
+      if (!response.ok) return false;
+      p.color = picked;
+      applyPointColorVisuals(idx);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }));
+
+  const failed = results.filter(ok => !ok).length;
+  showToast(failed
+    ? `Recolored ${results.length - failed}/${results.length} — ${failed} failed.`
+    : `Recolored ${results.length} point(s).`, !!failed);
+});
+
+// Bulk delete: live player markers have no delete concept (they just expire
+// naturally) — silently excluded from the selection rather than erroring.
+document.getElementById('btn-bulk-delete').addEventListener('click', async () => {
+  const targets = [...selectedIndices].filter(idx => !pointData[idx].name.startsWith(PLAYER_MARKER_PREFIX));
+  if (!targets.length) {
+    showToast("Nothing deletable in the selection — live player markers can't be deleted.", true);
+    return;
+  }
+
+  if (!await confirmDialog(`Delete ${targets.length} selected point(s)? This cannot be undone.`, 'DELETE SELECTED')) return;
+
+  const results = await Promise.all(targets.map(async (idx) => {
+    const p = pointData[idx];
+    const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
+    try {
+      const response = await fetch(isSignal ? '/map/delete_signal' : '/map/delete_point', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isSignal
+          ? { guild_id: LIVE.guildId, channel_id: LIVE.channelId, signal_id: p.signal_id }
+          : { guild_id: LIVE.guildId, channel_id: LIVE.channelId, name: p.name }),
+      });
+      // A 400 here is realistically "not found" (already gone — see the
+      // single-item dismiss/delete flows' same "not found" -> already
+      // cleared handling) since routing/name are correct by construction.
+      if (response.ok || response.status === 400) {
+        hidePointLocally(idx);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }));
+
+  const failed = results.filter(ok => !ok).length;
+  showToast(failed
+    ? `Deleted ${results.length - failed}/${results.length} — ${failed} failed.`
+    : `Deleted ${results.length} point(s).`, !!failed);
 });
 
 // ── SIDEBAR TOGGLE ───────────────────────────────────────────────────────
@@ -2381,7 +3421,7 @@ renderer.domElement.addEventListener('click', (e) => {
       activeIdx = null;
       hitFlashes.clear();
       document.getElementById('hud-active').textContent = '—';
-      document.getElementById('detail-panel').style.display = 'none';
+      document.getElementById('detail-panel').classList.remove('visible');
     } else {
       selectPoint(idx);
       const item = document.querySelector(`.point-item[data-idx="${idx}"]`);
@@ -2442,6 +3482,9 @@ function addLivePoint(fresh, extra) {
     velocity: (extra && extra.velocity) || null,
     prediction: (extra && extra.prediction) || [],
     lastSeenAt: (extra && extra.last_seen_at) || null,
+    signal_id: (extra && extra.signal_id) || null,
+    category: (extra && extra.category) || null,
+    weaponLock: (extra && extra.weapon_lock) || null,
     basePos: { x: fresh.x, y: fresh.y, z: fresh.z },
     lastUpdateAt: Date.now(),
   };
@@ -2453,9 +3496,11 @@ function addLivePoint(fresh, extra) {
   glows.push(glow);
   trailLines.push(buildTrailLine(p));
   predictionLines.push(buildPredictionLine(p));
+  lockLines.push(buildLockLine(p));
 
   listEl.appendChild(createListItem(p, idx));
   updateLastSeenDisplays();
+  updateLockDisplays();
   return p;
 }
 
@@ -2489,7 +3534,7 @@ function applyLiveUpdate(data) {
       structureChanged = true;
     }
     meshes[idx].position.set(p.x, p.y, p.z);
-    meshes[idx].material.color.set(p.color);
+    meshes[idx].material.color.set(p.color).multiplyScalar(POINT_MESH_DIM);
     glows[idx].position.set(p.x, p.y, p.z);
     glows[idx].material.color.set(p.color);
 
@@ -2497,8 +3542,11 @@ function applyLiveUpdate(data) {
     p.velocity = (extra && extra.velocity) || null;
     p.prediction = (extra && extra.prediction) || [];
     p.lastSeenAt = (extra && extra.last_seen_at) || null;
+    p.category = (extra && extra.category) || null;
+    p.weaponLock = (extra && extra.weapon_lock) || null;
     updateTrailLine(idx);
     updatePredictionLine(idx);
+    updateLockLine(idx);
 
     if (activeIdx === idx) {
       document.getElementById('detail-x').textContent = p.x.toFixed(3);
@@ -2508,6 +3556,7 @@ function applyLiveUpdate(data) {
     }
   }
   updateLastSeenDisplays();
+  updateLockDisplays();
 
   // Anything tracked here but absent from the fresh list was removed
   // server-side (e.g. deleted via a Discord command) — hide it in place.
@@ -2523,7 +3572,7 @@ function applyLiveUpdate(data) {
       document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
       activeIdx = null;
       hitFlashes.clear();
-      document.getElementById('detail-panel').style.display = 'none';
+      document.getElementById('detail-panel').classList.remove('visible');
       updateSelectionHud();
     }
   }
@@ -2611,6 +3660,88 @@ for (const id of ['edit-color-h', 'edit-color-s', 'edit-color-v']) {
   document.getElementById(id).addEventListener('input', updateColorPreview);
 }
 
+// ── TOAST (in-theme replacement for alert()) ───────────────────────────────
+let toastTimer = null;
+function showToast(message, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = message;
+  el.classList.toggle('error', !!isError);
+  el.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('visible'), 3500);
+}
+
+// ── CONFIRM MODAL (in-theme replacement for confirm()) ─────────────────────
+// await confirmDialog('Delete "X"?') -> true/false. Only one at a time —
+// a second call before the first resolves rejects the first as false so it
+// never hangs waiting for a click that will never come.
+let confirmResolve = null;
+function confirmDialog(message, title) {
+  if (confirmResolve) confirmResolve(false);
+  document.getElementById('confirm-modal-title').textContent = title || 'CONFIRM';
+  document.getElementById('confirm-modal-message').textContent = message;
+  document.getElementById('confirm-modal-backdrop').classList.add('open');
+  return new Promise(resolve => { confirmResolve = resolve; });
+}
+function settleConfirm(result) {
+  document.getElementById('confirm-modal-backdrop').classList.remove('open');
+  const resolve = confirmResolve;
+  confirmResolve = null;
+  if (resolve) resolve(result);
+}
+document.getElementById('confirm-modal-ok-btn').addEventListener('click', () => settleConfirm(true));
+document.getElementById('confirm-modal-cancel-btn').addEventListener('click', () => settleConfirm(false));
+document.getElementById('confirm-modal-backdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'confirm-modal-backdrop') settleConfirm(false);
+});
+
+// ── COLOR PICKER MODAL (in-theme replacement for <input type=color>) ───────
+// await pickColor('#FFFF3030', 'Signal color') -> '#rrggbb' CSS hex, or null
+// if cancelled. Accepts either an ARGB '#AARRGGBB' or CSS '#rrggbb' string.
+// Same H/S/V-slider component as the GPS point edit modal, just addressed
+// via color-modal-* ids instead of edit-color-* so both can exist at once
+// (e.g. bulk-recolor opens this while the edit modal isn't involved at all).
+let colorModalResolve = null;
+function updateColorModalPreview() {
+  const h = Number(document.getElementById('color-modal-h').value);
+  const s = Number(document.getElementById('color-modal-s').value);
+  const v = Number(document.getElementById('color-modal-v').value);
+  document.getElementById('color-modal-h-val').textContent = h;
+  document.getElementById('color-modal-s-val').textContent = s;
+  document.getElementById('color-modal-v-val').textContent = v;
+  const { r, g, b } = hsvToRgb(h, s, v);
+  const hex = rgbToHex(r, g, b);
+  document.getElementById('color-modal-preview').style.background = hex;
+  return hex;
+}
+for (const id of ['color-modal-h', 'color-modal-s', 'color-modal-v']) {
+  document.getElementById(id).addEventListener('input', updateColorModalPreview);
+}
+function pickColor(initialColor, title) {
+  if (colorModalResolve) colorModalResolve(null);
+  document.getElementById('color-modal-title').textContent = title || 'CHOOSE COLOR';
+  const cssColor = (initialColor || '#FFFFFFFF').length === 9 ? argbToCss(initialColor) : initialColor;
+  const { r, g, b } = hexToRgb(cssColor);
+  const { h, s, v } = rgbToHsv(r, g, b);
+  document.getElementById('color-modal-h').value = Math.round(h);
+  document.getElementById('color-modal-s').value = Math.round(s);
+  document.getElementById('color-modal-v').value = Math.round(v);
+  updateColorModalPreview();
+  document.getElementById('color-modal-backdrop').classList.add('open');
+  return new Promise(resolve => { colorModalResolve = resolve; });
+}
+function settleColorModal(result) {
+  document.getElementById('color-modal-backdrop').classList.remove('open');
+  const resolve = colorModalResolve;
+  colorModalResolve = null;
+  if (resolve) resolve(result);
+}
+document.getElementById('color-modal-ok-btn').addEventListener('click', () => settleColorModal(updateColorModalPreview()));
+document.getElementById('color-modal-cancel-btn').addEventListener('click', () => settleColorModal(null));
+document.getElementById('color-modal-backdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'color-modal-backdrop') settleColorModal(null);
+});
+
 function openEditModal(i) {
   editingIdx = i;
   const p = pointData[i];
@@ -2680,13 +3811,10 @@ async function saveEdit() {
   p.tag = extractTag(p.name);
   p.type = extractType(p.name);
 
-  meshes[idx].material.color.set(p.color);
-  glows[idx].material.color.set(p.color);
+  applyPointColorVisuals(idx);
 
   const row = document.querySelector(`.point-item[data-idx="${idx}"]`);
   if (row) {
-    const dot = row.querySelector('.pt-color');
-    if (dot) { dot.style.background = p.color; dot.style.color = p.color; }
     const nameEl = row.querySelector('.pt-name');
     if (nameEl) nameEl.textContent = p.name;
   }
@@ -2699,8 +3827,202 @@ async function saveEdit() {
   closeEditModal();
 }
 
+// Pushes pointData[idx].color onto its mesh/glow/sidebar-dot — shared by
+// saveEdit (vault point rename+recolor) and the color-only editors below
+// (signals, live players, bulk recolor).
+function applyPointColorVisuals(idx) {
+  const p = pointData[idx];
+  meshes[idx].material.color.set(p.color).multiplyScalar(POINT_MESH_DIM);
+  glows[idx].material.color.set(p.color);
+  const row = document.querySelector(`.point-item[data-idx="${idx}"]`);
+  if (row) {
+    const dot = row.querySelector('.pt-color');
+    if (dot) { dot.style.background = p.color; dot.style.color = p.color; }
+  }
+}
+
+// Color-only editor for a live player marker (◆) — reuses /map/edit_point
+// with old_name === new_name (server treats that as "recolor only", see
+// sync_api.py's edit_point). Sets color_override server-side so the next
+// position sync (or the "player" admin category color) doesn't clobber it.
+async function editPlayerColor(idx) {
+  const p = pointData[idx];
+  const picked = await pickColor(p.color, `Recolor ${p.name}`);
+  if (!picked) return;
+
+  let response;
+  try {
+    response = await fetch('/map/edit_point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guild_id: LIVE.guildId,
+        channel_id: LIVE.channelId,
+        old_name: p.name,
+        new_name: p.name,
+        color: picked,
+      }),
+    });
+  } catch (e) {
+    showToast('Network error — try again.', true);
+    return;
+  }
+
+  if (!response.ok) {
+    let message = 'Recolor failed.';
+    try { message = (await response.json()).error || message; } catch (e) {}
+    showToast(message, true);
+    return;
+  }
+
+  p.color = picked;
+  applyPointColorVisuals(idx);
+}
+
+// Color-only editor for a hostile signal (⚠) — signals have no editable
+// name, so this is the only edit action they get. Sets color_override
+// server-side so the category's admin-set color no longer wins for this
+// one signal (see VectorHandler.py's get_hostile_signals).
+async function editSignalColor(idx) {
+  const p = pointData[idx];
+  if (!p.signal_id) return;
+  const picked = await pickColor(p.color, `Recolor ${p.name}`);
+  if (!picked) return;
+
+  let response;
+  try {
+    response = await fetch('/map/edit_signal_color', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guild_id: LIVE.guildId,
+        channel_id: LIVE.channelId,
+        signal_id: p.signal_id,
+        color: picked,
+      }),
+    });
+  } catch (e) {
+    showToast('Network error — try again.', true);
+    return;
+  }
+
+  if (!response.ok) {
+    let message = 'Recolor failed.';
+    try { message = (await response.json()).error || message; } catch (e) {}
+    if (response.status === 400 && /not found/i.test(message)) {
+      showToast(`"${p.name}" was already cleared.`, false);
+      hidePointLocally(idx);
+      return;
+    }
+    showToast(message, true);
+    return;
+  }
+
+  p.color = picked;
+  applyPointColorVisuals(idx);
+}
+
+// Same "hide in place, never shift indices" treatment applyLiveUpdate gives
+// a point removed server-side — instant feedback after a manual delete
+// rather than waiting up to pollMs for the next /map/live poll to notice.
+function hidePointLocally(idx) {
+  const p = pointData[idx];
+  p.removedByServer = true;
+  setPointHidden(idx, true);
+  selectedIndices.delete(idx);
+  markMultiSelected(idx, false);
+  if (activeIdx === idx) {
+    document.querySelector(`.point-item[data-idx="${activeIdx}"]`)?.classList.remove('active');
+    activeIdx = null;
+    hitFlashes.clear();
+    document.getElementById('detail-panel').classList.remove('visible');
+    updateSelectionHud();
+  }
+  updateVisibility();
+}
+
+async function deleteEditingPoint() {
+  if (editingIdx === null) return;
+  const idx = editingIdx;
+  const p = pointData[idx];
+  const errorEl = document.getElementById('edit-modal-error');
+
+  if (!await confirmDialog(`Delete "${p.name}"? This removes it from the vault permanently.`, 'DELETE POINT')) return;
+
+  let response;
+  try {
+    response = await fetch('/map/delete_point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guild_id: LIVE.guildId,
+        channel_id: LIVE.channelId,
+        name: p.name,
+      }),
+    });
+  } catch (e) {
+    errorEl.textContent = 'Network error — try again.';
+    errorEl.style.display = '';
+    return;
+  }
+
+  if (!response.ok) {
+    let message = 'Delete failed.';
+    try { message = (await response.json()).error || message; } catch (e) {}
+    errorEl.textContent = message;
+    errorEl.style.display = '';
+    return;
+  }
+
+  hidePointLocally(idx);
+  closeEditModal();
+}
+
+async function dismissSignal(idx) {
+  const p = pointData[idx];
+  if (!p.signal_id) return;
+
+  if (!await confirmDialog(`Dismiss "${p.name}"? It reappears if still being detected in-game.`, 'DISMISS SIGNAL')) return;
+
+  let response;
+  try {
+    response = await fetch('/map/delete_signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guild_id: LIVE.guildId,
+        channel_id: LIVE.channelId,
+        signal_id: p.signal_id,
+      }),
+    });
+  } catch (e) {
+    showToast('Network error — try again.', true);
+    return;
+  }
+
+  if (!response.ok) {
+    let message = 'Dismiss failed.';
+    try { message = (await response.json()).error || message; } catch (e) {}
+    // The server prunes stale signals (e.g. "unidentified" after just 5
+    // minutes) on every /map/live poll — a marker the client is still
+    // showing can lose that race and already be gone by the time this
+    // click lands. Either way the point should disappear locally; treat
+    // "not found" as already-handled instead of an error.
+    if (response.status === 400 && /not found/i.test(message)) {
+      showToast(`"${p.name}" was already cleared.`, false);
+      hidePointLocally(idx);
+      return;
+    }
+    showToast(message, true);
+    return;
+  }
+
+  hidePointLocally(idx);
+}
+
 document.getElementById('edit-cancel-btn').addEventListener('click', closeEditModal);
 document.getElementById('edit-save-btn').addEventListener('click', saveEdit);
+document.getElementById('edit-delete-btn').addEventListener('click', deleteEditingPoint);
 document.getElementById('edit-modal-backdrop').addEventListener('click', (e) => {
   if (e.target.id === 'edit-modal-backdrop') closeEditModal();
 });
@@ -2761,24 +4083,69 @@ function updateLiveDeadReckoning() {
 let frame = 0;
 const _camPos = new THREE.Vector3();
 const _ptPos  = new THREE.Vector3();
-const DASH_ANIM_SPEED = 0.02; // fraction of DASH_SIZE per frame
+const DASH_ANIM_SPEED = 0.02; // fraction of that line's own dashSize per frame
 
 (function loop() {
   requestAnimationFrame(loop);
   controls.update();
   frame++;
 
+  // Adaptive near/far: a fixed 0.1/1e12 pair (10^13 depth range) is needed
+  // to cover both this scene's real-world-scale coordinates (millions of
+  // units) and close-up detail, but the depth buffer can't resolve that
+  // whole range at once — the closer the camera actually is to what it's
+  // looking at, the tighter near/far need to be to keep depth precision (and
+  // therefore z-fighting/jank) under control. Recomputed every frame since
+  // zoom distance changes continuously; the cost is a handful of scalar ops
+  // plus one 4x4 matrix rebuild, negligible next to the render itself.
+  // No span-tied floor on nextFar: at the initial zoomed-out view orbitDist
+  // is already ~2.6x span, so orbitDist*100 covers the whole point cloud
+  // comfortably on its own — a span-based floor only ever mattered (and
+  // only ever hurt) once minDistance was lowered enough to zoom in close,
+  // where it would force a huge far plane regardless of actual zoom level
+  // and wreck the depth precision this adaptive near/far exists to protect.
+  const orbitDist = controls.getDistance();
+  const nextNear = Math.max(0.05, orbitDist * 0.001);
+  // Planets sit at a fixed world position regardless of what you're zoomed
+  // into, so orbitDist alone isn't a safe far-plane floor — zooming in tight
+  // on a nearby GPS point while a planet sits thousands of km away would
+  // clip the planet out of the frustum entirely. Extend the floor to cover
+  // the farthest planet from the camera's actual (not orbit-target) position.
+  let farFloor = orbitDist * 100;
+  camera.getWorldPosition(_camPos);
+  for (const planet of PLANETS) {
+    const d = _camPos.distanceTo(planet.worldPos) + planet.radius * 1.2;
+    if (d > farFloor) farFloor = d;
+  }
+  const nextFar = Math.max(nextNear * 1000, farFloor);
+  if (Math.abs(camera.near - nextNear) > camera.near * 0.01 || Math.abs(camera.far - nextFar) > camera.far * 0.01) {
+    camera.near = nextNear;
+    camera.far = nextFar;
+    camera.updateProjectionMatrix();
+  }
+
   updateLiveDeadReckoning();
 
   // Flowing "marching ants" animation on prediction lines, distinguishing
-  // them from the static solid trail at a glance.
-  for (const line of predictionLines) {
+  // them from the static solid trail at a glance. dashSize/gapSize are
+  // rescaled every frame by the same distance-based factor as point/glow
+  // sizing (getPointScale) — otherwise the world-space dash length fixed at
+  // build time ends up covering most/all of the screen once you zoom in
+  // close, making the line look solid instead of dashed. The floor keeps a
+  // dash from shrinking to sub-pixel nothing at extreme zoom.
+  for (let i = 0; i < predictionLines.length; i++) {
+    const line = predictionLines[i];
     if (!line) continue;
-    line.material.dashOffset -= DASH_SIZE * DASH_ANIM_SPEED;
+    _ptPos.set(pointData[i].x, pointData[i].y, pointData[i].z);
+    const dist = _camPos.distanceTo(_ptPos);
+    const scale = getPointScale(dist);
+    const dashSize = Math.max(line.material.userData.baseDashSize * scale, MIN_DASH_SIZE * 0.1);
+    line.material.dashSize = dashSize;
+    line.material.gapSize = dashSize * 0.6;
+    line.material.dashOffset -= dashSize * DASH_ANIM_SPEED;
   }
 
-  // Distance-based point scaling
-  camera.getWorldPosition(_camPos);
+  // Distance-based point scaling (_camPos already refreshed above for the far-plane check)
   for (let i = 0; i < meshes.length; i++) {
     if (!meshes[i].visible) continue;
     _ptPos.set(pointData[i].x, pointData[i].y, pointData[i].z);
@@ -2806,14 +4173,14 @@ const DASH_ANIM_SPEED = 0.02; // fraction of DASH_SIZE per frame
     if (pulseRing) { scene.remove(pulseRing); pulseRing = null; }
     // Restore any lingering flash colors
     for (const [j] of hitFlashes) {
-      meshes[j].material.color.set(pointData[j].color);
+      meshes[j].material.color.set(pointData[j].color).multiplyScalar(POINT_MESH_DIM);
       glows[j].material.color.set(pointData[j].color);
-      glows[j].material.opacity = 0.35;
+      glows[j].material.opacity = GLOW_BASE_OPACITY;
     }
     hitFlashes.clear();
   }
 
-  renderer.render(scene, camera);
+  renderScene();
 })();
 </script>
 </body>

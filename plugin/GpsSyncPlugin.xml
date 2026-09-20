@@ -7,7 +7,7 @@
     <!-- GitHub repository ID (owner/repo) -->
     <RepoId>Blues-Hailfire/Space-Engineers_GPS_Manager</RepoId>
 
-    <FriendlyName>GPS Vault Sync</FriendlyName>
+    <FriendlyName>GPS Vault - DataLink</FriendlyName>
     <Author>Blues-Hailfire</Author>
 
     <Tooltip>Syncs your in-game GPS list and live position to a Discord GPS vault</Tooltip>
@@ -15,8 +15,9 @@
 Space Engineers GPS Manager Discord bot, so your faction's shared GPS vault stays
 up to date without manually pasting GPS strings.
 
-Configure the bot endpoint, sync token and sync intervals from Pulsar's plugin
-list: select GPS Vault Sync and click Configure.
+Configure sync profiles (endpoint/token/channel), per-world sync on/off, and
+sync intervals from Pulsar's plugin list: select GPS Vault - DataLink and click
+Configure.
     </Description>
 
     <!-- Only this folder's source is compiled; the Python bot in the repo root is excluded. -->
