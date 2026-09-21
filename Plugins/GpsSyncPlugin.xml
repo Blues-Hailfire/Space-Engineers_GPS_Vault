@@ -2,7 +2,7 @@
 <PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
     <Id>93da3f83-138b-4a71-847e-11240a95c0a0</Id>
     <RepoId>Blues-Hailfire/Space-Engineers_GPS_Vault</RepoId>
-    <FriendlyName>Unified Storage</FriendlyName>
+    <FriendlyName>GPS Vault - Datalink</FriendlyName>
     <Author>Blues Hailfire</Author>
     <Tooltip>Client for GPS Vault, has built in searching tools</Tooltip>
     <Description>Automatically syncs your Space Engineers GPS list, live player position, home system's planets, and nearby detected contacts (enemy, neutral, allied, unidentified) to the Space Engineers GPS Manager Discord bot, so your faction's shared vault and live web map stay up to date without manually pasting GPS strings</Description>
