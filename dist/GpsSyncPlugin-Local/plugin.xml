@@ -9,8 +9,5 @@
     <SourceDirectories>
         <Directory>plugin</Directory>
     </SourceDirectories>
-    <NuGetReferences>
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    </NuGetReferences>
     <Commit>1db835cffad88a500807d0d1e6b560e1f381f87e</Commit>
 </PluginData>
