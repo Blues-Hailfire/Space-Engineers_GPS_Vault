@@ -1892,6 +1892,12 @@ function makePlanetLabelSprite(text, worldSize) {
 // wireframe sphere at true world scale.
 const PLANET_COLOR = 0xff9900;
 
+// Raycast targets for double-click-to-focus on the 3D view (see the dblclick
+// handler below) — a plain Mesh's geometry is what the raycaster tests
+// against regardless of wireframe rendering, so this hits the sphere's true
+// silhouette, not just its wire lines.
+const planetMeshes = [];
+
 for (const planet of PLANETS) {
   planet.worldPos = new THREE.Vector3(planet.x, planet.y, planet.z); // cached for the render loop's far-plane check
   const wireGeom = new THREE.SphereGeometry(planet.radius, 20, 14);
@@ -1904,7 +1910,9 @@ for (const planet of PLANETS) {
   });
   const wireMesh = new THREE.Mesh(wireGeom, wireMat);
   wireMesh.position.set(planet.x, planet.y, planet.z);
+  wireMesh.userData = planet;
   scene.add(wireMesh);
+  planetMeshes.push(wireMesh);
 
   // Soft ambient halo, same technique as the point glow sprites — a bare
   // wireframe barely covers enough pixels to bloom on its own, so this gives
@@ -3430,6 +3438,32 @@ renderer.domElement.addEventListener('click', (e) => {
         list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
       }
     }
+  }
+});
+
+// Double-click a GPS point or planet directly in the 3D view to focus the
+// camera on it — same behavior as their sidebar list items' ◎ button,
+// just reachable straight from the scene instead of hunting the point up
+// in a (possibly long, filtered) list first.
+renderer.domElement.addEventListener('dblclick', (e) => {
+  if (measureMode) return;
+
+  const rect = viewport.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const visibleMeshes = meshes.filter(m => m.visible);
+  const pointHit = raycaster.intersectObjects(visibleMeshes, false)[0];
+  if (pointHit) {
+    focusPoint(pointData.indexOf(pointHit.object.userData));
+    return;
+  }
+
+  const planetHit = raycaster.intersectObjects(planetMeshes, false)[0];
+  if (planetHit) {
+    const planet = planetHit.object.userData;
+    panCameraTo(planet.x, planet.y, planet.z);
   }
 });
 
