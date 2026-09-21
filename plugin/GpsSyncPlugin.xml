@@ -1,31 +1,13 @@
 <?xml version="1.0"?>
 <PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
-
-    <!-- Fixed identifier for this plugin. Do not change once published/shared. -->
     <Id>93da3f83-138b-4a71-847e-11240a95c0a0</Id>
-
-    <!-- GitHub repository ID (owner/repo) -->
-    <RepoId>Blues-Hailfire/Space-Engineers_GPS_Manager</RepoId>
-
-    <FriendlyName>GPS Vault - DataLink</FriendlyName>
-    <Author>Blues-Hailfire</Author>
-
-    <Tooltip>Syncs your in-game GPS list and live position to a Discord GPS vault</Tooltip>
-    <Description>Automatically syncs your Space Engineers GPS points and live player position to the
-Space Engineers GPS Manager Discord bot, so your faction's shared GPS vault stays
-up to date without manually pasting GPS strings.
-
-Configure sync profiles (endpoint/token/channel), per-world sync on/off, and
-sync intervals from Pulsar's plugin list: select GPS Vault - DataLink and click
-Configure.
-    </Description>
-
-    <!-- Only this folder's source is compiled; the Python bot in the repo root is excluded. -->
+    <RepoId>Blues-Hailfire/Space-Engineers_GPS_Vault</RepoId>
+    <FriendlyName>Unified Storage</FriendlyName>
+    <Author>Blues Hailfire</Author>
+    <Tooltip>Client for GPS Vault, has built in searching tools</Tooltip>
+    <Description>Automatically syncs your Space Engineers GPS list, live player position, home system's planets, and nearby detected contacts (enemy, neutral, allied, unidentified) to the Space Engineers GPS Manager Discord bot, so your faction's shared vault and live web map stay up to date without manually pasting GPS strings</Description>
     <SourceDirectories>
         <Directory>plugin</Directory>
     </SourceDirectories>
-
-    <!-- TODO: commit and push this plugin/ folder, then replace with that commit's full hash. -->
-    <Commit>PLACEHOLDER_COMMIT_HASH</Commit>
-
+    <Commit>1db835cffad88a500807d0d1e6b560e1f381f87e</Commit>
 </PluginData>

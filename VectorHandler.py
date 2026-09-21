@@ -1215,7 +1215,6 @@ async def bind(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="create_sync_token", description="Create a token for the Space Engineers plugin to sync GPS/position into this channel.")
-@discord.app_commands.default_permissions(administrator=True)
 @discord.app_commands.describe(label="Optional name to help you identify this token later (e.g. a player's name)")
 async def create_sync_token_cmd(interaction: discord.Interaction, label: Optional[str] = None):
     if await reject_if_not_bound(interaction):
@@ -1230,7 +1229,6 @@ async def create_sync_token_cmd(interaction: discord.Interaction, label: Optiona
 
 
 @bot.tree.command(name="revoke_sync_token", description="Revoke a sync token by its label or the start of its value.")
-@discord.app_commands.default_permissions(administrator=True)
 async def revoke_sync_token_cmd(interaction: discord.Interaction, token_prefix: str):
     if await reject_if_not_bound(interaction):
         return
@@ -1242,7 +1240,6 @@ async def revoke_sync_token_cmd(interaction: discord.Interaction, token_prefix: 
 
 
 @bot.tree.command(name="list_sync_tokens", description="List active sync tokens for this channel (labels only, not the full token).")
-@discord.app_commands.default_permissions(administrator=True)
 async def list_sync_tokens_cmd(interaction: discord.Interaction):
     if await reject_if_not_bound(interaction):
         return
