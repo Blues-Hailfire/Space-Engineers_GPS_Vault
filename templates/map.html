@@ -20,6 +20,7 @@
     --brut-border: 2px solid #ffffff;
     --glow:   0 0 6px rgba(255,255,255,0.14), 0 0 16px rgba(255,255,255,0.05);
     --sidebar-w: 320px;
+    --players-panel-w: 300px;
     --mono: 'Share Tech Mono', monospace;
     --head: 'Orbitron', monospace;
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -387,9 +388,12 @@
     flex-shrink: 0;
   }
   /* Capped + independently scrollable, like #point-list below it, so a world
-     with many planets doesn't grow this section and squeeze the GPS list. */
+     with many planets doesn't grow this section and squeeze the GPS list.
+     Sized for 3.5 rows (~36px/row: 12px vertical padding + a ~12px name
+     line + a ~12px radius line) so the list visibly cuts off mid-row as a
+     scroll affordance rather than stopping on a clean row boundary. */
   .planet-items {
-    max-height: 180px;
+    max-height: 130px;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
@@ -971,6 +975,115 @@
     justify-content: flex-end;
   }
 
+  /* ── PLAYERS PANEL (right-side popout, mirrors #sidebar/#sidebar-toggle) ──
+     Anchored near the top of the right edge, not vertically centered like
+     #measure-btn (top:50%) and not full-height — otherwise both the closed
+     tab and the open panel would sit right on top of the measure button.
+     Sized to show ~5 players before #players-list itself scrolls, rather
+     than taking the whole screen height for a handful of rows. */
+  #players-panel-toggle {
+    position: fixed;
+    right: 0;
+    top: 90px;
+    width: 32px;
+    background: #000000;
+    border: var(--brut-border);
+    border-right: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 0;
+    color: rgba(255,255,255,0.7);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    z-index: 11;
+    clip-path: none;
+    transition: right 0.3s var(--ease), background 0.1s, color 0.1s;
+  }
+  #players-panel-toggle span { writing-mode: vertical-rl; transform: rotate(180deg); }
+  #players-panel-toggle:hover { background: #ffffff; color: #000000; }
+  #players-panel-toggle.open { right: var(--players-panel-w); }
+  #players-panel {
+    position: fixed;
+    right: 0;
+    top: 90px;
+    width: var(--players-panel-w);
+    max-height: calc(100vh - 110px);
+    background: #000000;
+    border: var(--brut-border);
+    border-right: none;
+    box-shadow: -4px 0 0px rgba(255,255,255,0.06);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s var(--ease);
+  }
+  #players-panel.open { transform: translateX(0); }
+  #players-panel-header {
+    padding: 14px;
+    border-bottom: var(--brut-border);
+    flex-shrink: 0;
+    font-family: var(--head);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: #ffffff;
+    background: #000;
+  }
+  #players-list {
+    /* Real cap is set inline by openPlayersModal, measured from the actual
+       first 5 rows (an online row and an offline row aren't the same
+       height) — this is just a sane fallback before that runs. */
+    max-height: 280px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 14px;
+  }
+  #players-list::-webkit-scrollbar { width: 3px; }
+  #players-list::-webkit-scrollbar-track { background: #000; }
+  #players-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); }
+  .player-row {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .player-row:last-child { border-bottom: none; }
+  /* An online player's row wraps a reused .point-item (see openPlayersModal)
+     — that already has its own padding/border/hover, so drop this row's own
+     to avoid doubling both up. */
+  .player-row:has(.point-item) {
+    padding: 0;
+    border-bottom: none;
+  }
+  .player-row-name {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.9);
+  }
+  .player-row-meta {
+    font-size: 9px;
+    color: rgba(255,255,255,0.45);
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+  .player-row:has(.point-item) .player-row-meta {
+    padding: 4px 10px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-top: 0;
+  }
+  .player-row:has(.point-item):last-child .player-row-meta { border-bottom: none; }
+  #players-empty {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    text-align: center;
+    padding: 12px 0;
+  }
+
   /* ── TOAST (in-theme replacement for alert()) ─────────────────────────── */
   #toast {
     position: fixed;
@@ -1053,22 +1166,163 @@
     font-size: 10px;
     letter-spacing: 0.15em;
     padding: 8px 14px;
-    background: rgba(0,0,0,0.88);
-    border: 1px solid rgba(255,255,255,0.18);
-    color: rgba(255,255,255,0.55);
+    background: #000000;
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #ffffff;
     cursor: pointer;
     pointer-events: all;
     transition: all 0.2s;
     writing-mode: vertical-rl;
     clip-path: none;
   }
-  #measure-btn:hover { border-color: rgba(255,255,255,0.4); color: #d8d8d8; }
+  #measure-btn:hover { background: #ffffff; border-color: #ffffff; color: #000000; }
   #measure-btn.active {
-    background: rgba(255,255,255,0.07);
-    border-color: rgba(255,255,255,0.45);
-    color: #e0e0e0;
-    box-shadow: 0 0 14px rgba(255,255,255,0.1);
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #000000;
+    box-shadow: 0 0 14px rgba(255,255,255,0.25);
   }
+  /* The players panel (z-index 10, same as this button — see #players-panel
+     below) slides in from the right over whatever's underneath it,
+     including this button's own top:50% resting spot. A previous attempt
+     to dodge it by animating #measure-btn's `right` offset instead of
+     hiding it here was reported as still popping/jumping oddly, likely a
+     transition-timing mismatch against the panel's own 0.3s slide (or an
+     overflow at narrower window widths where the shifted position no
+     longer fits) — sidestepped entirely now by just not showing the button
+     (or the distance panel, in case a measurement was already in progress)
+     while the players panel is open, instead of trying to keep it visible
+     and correctly positioned during that animation. Reappears exactly
+     where it always was, with its in-progress state intact, once the
+     players panel closes again. */
+  body.players-panel-open #measure-btn,
+  body.players-panel-open #dist-panel {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s var(--ease);
+  }
+
+  /* ── REPLAY BAR ───────────────────────────────────────────
+     Video-scrubber style bottom bar for rewinding through recorded
+     position/hostile-signal history (see /map/replay in sync_api.py).
+     Toggled by #replay-toggle-btn in the sidebar's bulk-bar; lives inside
+     #viewport (not #app) so it never overlaps the sidebar, same as
+     #dist-panel/#detail-panel above. Collapsed (translateY + 0 opacity)
+     until .open is added, matching the sidebar's own slide transition. */
+  #replay-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9;
+    background: rgba(0,0,0,0.97);
+    border-top: var(--brut-border);
+    padding: 10px 16px;
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    transform: translateY(100%);
+    pointer-events: none;
+    transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+  }
+  #replay-bar.open {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  #replay-bar-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  #replay-bar-title {
+    font-family: var(--head);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+  }
+  #replay-time-input {
+    font-family: var(--head);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(255,255,255,0.25);
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+    /* Renders the native calendar/clock picker icon (and its popup) in a
+       light color suited to this dark bar instead of black-on-black. */
+    color-scheme: dark;
+    cursor: text;
+  }
+  #replay-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #replay-playpause-btn, #replay-rewind-btn, #replay-forward-btn {
+    font-family: var(--mono);
+    background: #000;
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #ffffff;
+    width: 30px;
+    height: 26px;
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    transition: all 0.14s var(--ease);
+  }
+  #replay-playpause-btn:hover, #replay-rewind-btn:hover, #replay-forward-btn:hover { background: #ffffff; color: #000000; }
+  #replay-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.6);
+    outline: none;
+    cursor: pointer;
+  }
+  #replay-slider::-webkit-slider-runnable-track { background: transparent; height: 12px; }
+  #replay-slider::-moz-range-track { background: transparent; height: 12px; }
+  #replay-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 20px;
+    background: #ffffff;
+    border: 1px solid #000000;
+    cursor: pointer;
+    margin-top: -1px;
+  }
+  #replay-slider::-moz-range-thumb {
+    width: 10px;
+    height: 20px;
+    background: #ffffff;
+    border: 1px solid #000000;
+    cursor: pointer;
+    border-radius: 0;
+  }
+  #replay-resume-btn {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    background: #000;
+    border: 1px solid rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.14s var(--ease);
+  }
+  #replay-resume-btn:hover { background: #ffffff; border-color: #ffffff; color: #000000; }
+  /* Toast sits at bottom:28px by default (see #toast above) — lift it clear
+     of the replay bar while that's open, instead of the two overlapping. */
+  body.replay-bar-open #toast { bottom: 92px; }
 
   /* ── DISTANCE PANEL ──────────────────────────────────────── */
   #dist-panel {
@@ -1078,12 +1332,12 @@
     transform: translateX(-50%);
     z-index: 9;
     background: rgba(0,0,0,0.97);
-    border: 1px solid rgba(255,255,255,0.22);
+    border: var(--brut-border);
     padding: 12px 18px;
     min-width: 340px;
     backdrop-filter: blur(6px);
     clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
-    box-shadow: 0 0 24px rgba(255,255,255,0.05);
+    box-shadow: 0 0 24px rgba(255,255,255,0.08);
     margin-right: 120px;
     opacity: 0;
     transform: translate(-50%, 6px) scale(0.98);
@@ -1119,8 +1373,8 @@
     font-size: 10px;
   }
   .dist-slot.picked {
-    border-color: rgba(255,255,255,0.35);
-    background: rgba(255,255,255,0.04);
+    border-color: #ffffff;
+    background: rgba(255,255,255,0.06);
   }
   .dist-slot-label {
     font-size: 8px;
@@ -1268,8 +1522,7 @@
       <span class="bulk-label" style="color:#ff5050">THREATS &nbsp;<span id="active-hostile-count">0</span></span>
       <button class="bulk-btn" id="btn-show-all">SHOW ALL</button>
       <button class="bulk-btn" id="btn-hide-all">HIDE ALL</button>
-      <button class="bulk-btn" id="btn-bulk-recolor" style="display:none">RECOLOR SELECTED</button>
-      <button class="bulk-btn" id="btn-bulk-delete" style="display:none">DELETE SELECTED</button>
+      <button class="bulk-btn" id="replay-toggle-btn" style="display:none" title="Rewind through recorded history">&#9199; REPLAY</button>
       <button id="category-gear-btn" style="display:none" title="Signal category settings">&#9881;</button>
     </div>
 
@@ -1340,7 +1593,7 @@
     </div>
 
     <!-- Measure button -->
-    <button id="measure-btn" title="Measure distance between two points">⟷ MEASURE</button>
+    <button id="measure-btn" title="Measure distance between two points, planets, or asteroids">⟷ MEASURE</button>
 
     <!-- Distance panel -->
     <div id="dist-panel">
@@ -1348,12 +1601,12 @@
       <button id="dist-clear">×</button>
       <div class="dist-slots">
         <div class="dist-slot" id="dist-slot-a">
-          <div class="dist-slot-label">POINT A</div>
-          <div class="dist-slot-name empty" id="dist-name-a">— select station —</div>
+          <div class="dist-slot-label">A</div>
+          <div class="dist-slot-name empty" id="dist-name-a">— select point or body —</div>
         </div>
         <div class="dist-slot" id="dist-slot-b">
-          <div class="dist-slot-label">POINT B</div>
-          <div class="dist-slot-name empty" id="dist-name-b">— select station —</div>
+          <div class="dist-slot-label">B</div>
+          <div class="dist-slot-name empty" id="dist-name-b">— select point or body —</div>
         </div>
       </div>
       <div id="dist-graphic">
@@ -1395,6 +1648,27 @@
       <div class="detail-row" style="margin-top:4px"><span class="detail-key" style="color:#999">TAG</span><span class="detail-val" style="color:#c8c8c8" id="detail-tag">—</span></div>
       <div class="detail-row" id="detail-speed-row" style="display:none"><span class="detail-key" style="color:#999">SPEED</span><span class="detail-val" style="color:#c8c8c8" id="detail-speed">—</span></div>
       <div class="detail-row" id="detail-lastseen-row" style="display:none"><span class="detail-key" style="color:#999">LAST HEARD</span><span class="detail-val" style="color:#c8c8c8" id="detail-lastseen">—</span></div>
+      <!-- WeaponCore rows — each hidden unless that point carries the data (see updateCombatRows) -->
+      <div class="detail-row" id="detail-threat-row" style="display:none"><span class="detail-key" style="color:#999">THREAT</span><span class="detail-val" style="color:#e08860" id="detail-threat">—</span></div>
+      <div class="detail-row" id="detail-dps-row" style="display:none"><span class="detail-key" style="color:#999">DPS</span><span class="detail-val" style="color:#c8c8c8" id="detail-dps">—</span></div>
+      <div class="detail-row" id="detail-shipdps-row" style="display:none"><span class="detail-key" style="color:#999">SHIP DPS</span><span class="detail-val" style="color:#c8c8c8" id="detail-shipdps">—</span></div>
+      <div class="detail-row" id="detail-inrange-row" style="display:none"><span class="detail-key" style="color:#999">IN RANGE</span><span class="detail-val" style="color:#c8c8c8" id="detail-inrange">—</span></div>
+      <div class="detail-row" id="detail-missiles-row" style="display:none"><span class="detail-key" style="color:#999">MISSILES</span><span class="detail-val" style="color:#ff5050;font-weight:700" id="detail-missiles">—</span></div>
+    </div>
+
+    <!-- Replay scrubber (live view only — see #replay-toggle-btn) -->
+    <div id="replay-bar">
+      <div id="replay-bar-head">
+        <span id="replay-bar-title">&#9199; REPLAY — LAST <span id="replay-hours-label">24</span>H</span>
+        <input id="replay-time-input" type="datetime-local" step="1" title="Type or pick an exact time to jump to (your local time zone)">
+      </div>
+      <div id="replay-bar-row">
+        <button id="replay-rewind-btn" title="Back 30s">&#9198;</button>
+        <button id="replay-playpause-btn" title="Play/Pause">&#9654;</button>
+        <button id="replay-forward-btn" title="Forward 30s">&#9197;</button>
+        <input id="replay-slider" type="range" min="0" max="1000" value="1000" step="1">
+        <button id="replay-resume-btn">RESUME LIVE</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1403,8 +1677,10 @@
 <div id="edit-modal-backdrop">
   <div id="edit-modal">
     <div id="edit-modal-title">EDIT GPS POINT</div>
-    <label class="edit-modal-label" for="edit-name-input">Name</label>
-    <input id="edit-name-input" type="text" maxlength="32">
+    <div id="edit-name-row">
+      <label class="edit-modal-label" for="edit-name-input">Name</label>
+      <input id="edit-name-input" type="text" maxlength="32">
+    </div>
     <label class="edit-modal-label">Color</label>
     <div id="edit-color-picker">
       <div id="edit-color-preview"></div>
@@ -1448,6 +1724,18 @@
       <button id="category-save-btn" class="edit-modal-btn primary">Save</button>
     </div>
   </div>
+</div>
+
+<!-- Players connected via a sync token, with last login/last seen — a
+     right-side popout mirroring the left #sidebar (toggle tab + sliding
+     panel), opened via #players-panel-toggle. Live players are no longer
+     listed in the main #point-list (see isPlayerPoint below); an online one
+     gets the exact same list item there instead (see openPlayersModal). -->
+<button id="players-panel-toggle" title="Players">&#9782;<span>PLAYERS</span></button>
+<div id="players-panel">
+  <div id="players-panel-header">PLAYERS</div>
+  <div id="players-list"></div>
+  <div id="players-empty" style="display:none">No players have synced into this channel yet.</div>
 </div>
 
 <!-- Generic in-theme confirmation dialog — replaces window.confirm(). Opened
@@ -1524,11 +1812,31 @@ const POINTS = {{POINTS_JSON}};
 // real-time movement. Always null on the standalone downloadable file.
 const LIVE = {{LIVE_CONFIG_JSON}};
 const PLANETS = {{PLANETS_JSON}}; // [{name, x, y, z, radius}, ...] — synced from the plugin
+const ASTEROIDS = {{ASTEROIDS_JSON}}; // same shape as PLANETS — radius is a bounding-sphere approximation
+const ORES = {{ORES_JSON}}; // [{deposit_id, name, ores, voxel_name, is_planet, x, y, z, locations}, ...]
+// An asteroid's real shape (see get_asteroid_shapes): {voxel_name, format:'mesh',
+// center_x/y/z, mesh_scale, vertices, indices} — or lazy_mesh instead of the blobs on
+// the live page (see loadLazyMeshes).
+const SHAPES = {{SHAPES_JSON}};
 
 // Name prefixes the server uses to mark non-vault, trail-tracked markers —
 // must match LIVE_POSITION_PREFIX / HOSTILE_SIGNAL_PREFIX in sync_api.py.
 const PLAYER_MARKER_PREFIX = '◆ ';
 const HOSTILE_MARKER_PREFIX = '⚠ ';
+
+// Player and signal markers are the most time-sensitive entries — keep them
+// pinned above ordinary GPS waypoints in the sidebar list.
+function isPriorityPoint(p) {
+  return p.name.startsWith(PLAYER_MARKER_PREFIX) || p.name.startsWith(HOSTILE_MARKER_PREFIX);
+}
+
+// Live players get their own top-right Players tab (see openPlayersModal)
+// instead of cluttering the sidebar's GPS point list — they're still
+// tracked in pointData/meshes as usual (3D marker, click-to-select, focus,
+// detail panel all still work), just never given a #point-list row.
+function isPlayerPoint(p) {
+  return p.name.startsWith(PLAYER_MARKER_PREFIX);
+}
 
 // ── TAG EXTRACTION ────────────────────────────────────────────────────────
 // Known suffix tags (network/group identifiers) — edit to match your server
@@ -1577,6 +1885,74 @@ const pointData = POINTS.map((p, i) => ({
   lastUpdateAt: Date.now(),
 }));
 
+// Ore points: one marker per asteroid/planet, already named "AST - Iron,Ice"
+// or "Earth - Iron,Ice" by the plugin (see OreDeposits.ReadOreDeposits) — no
+// separate ore/asteroid search UI needed, since that name IS the resource
+// list and the body it's on. Kept out of the sidebar and the 3D scene by
+// default (see oreRevealed in updateVisibility below); a search matching the
+// name (a resource, "AST", or a planet's name — all plain substrings of it)
+// or clicking the linked asteroid on the map (see revealedOreIds) reveals it.
+const revealedOreIds = new Set();
+const oreEntries = ORES.map((o, i) => ({
+  name: o.name,
+  x: o.x, y: o.y, z: o.z,
+  color: '#B08D57',
+  tag: null,
+  type: null,
+  isOre: true,
+  // A planet's ore points (one per ~100 m area) are still searchable in the
+  // sidebar but never drawn in the 3D scene - they read as stray white dots
+  // scattered over the planet's surface.
+  isPlanetOre: !!o.is_planet,
+  voxelName: o.voxel_name,
+  // Only ever populated for an asteroid's single point — the exact vein
+  // positions that were averaged together into x/y/z above (see
+  // OreDeposits.ReadOreDeposits's `locations`). Rendered as its own small
+  // dot cloud, shown/hidden together with this point (see ORE VEIN DOTS
+  // below and oreRevealed in updateVisibility).
+  locations: o.locations || [],
+  hidden: false,
+  removedByServer: false,
+  id: POINTS.length + i,
+  trail: [],
+  velocity: null,
+  prediction: [],
+  lastSeenAt: null,
+  weaponLock: null,
+  basePos: { x: o.x, y: o.y, z: o.z },
+  lastUpdateAt: Date.now(),
+}));
+pointData.push(...oreEntries);
+
+// Asteroids: no dedicated sidebar section/search box any more (see the old
+// #asteroid-list, removed) — they surface the same way ore does, through
+// the normal search/point-list machinery. Unlike ore there's no "click to
+// reveal" path (revealedOreIds), so an asteroid is listed only while the
+// search box actually matches its name — see isAsteroid in updateVisibility.
+// No `radius` field here (unlike a hostile signal's uncertainty sphere):
+// the asteroid's real bounding sphere/shape is already drawn by the
+// always-visible ASTEROIDS/SHAPES scene code below, so this entry is just a
+// small list/marker presence, not a second copy of that visual.
+const asteroidEntries = ASTEROIDS.map((a, i) => ({
+  name: a.name,
+  x: a.x, y: a.y, z: a.z,
+  color: '#999999',
+  tag: null,
+  type: null,
+  isAsteroid: true,
+  hidden: false,
+  removedByServer: false,
+  id: POINTS.length + ORES.length + i,
+  trail: [],
+  velocity: null,
+  prediction: [],
+  lastSeenAt: null,
+  weaponLock: null,
+  basePos: { x: a.x, y: a.y, z: a.z },
+  lastUpdateAt: Date.now(),
+}));
+pointData.push(...asteroidEntries);
+
 // ── SCENE SETUP ──────────────────────────────────────────────────────────
 const viewport = document.getElementById('viewport');
 const scene = new THREE.Scene();
@@ -1591,8 +1967,25 @@ starGeom.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
 const starMat = new THREE.PointsMaterial({ color: 0x282828, size: 8000, sizeAttenuation: true });
 scene.add(new THREE.Points(starGeom, starMat));
 
+// Shading for the asteroid shape meshes only (see buildMeshShape) — every
+// other material in the scene is MeshBasicMaterial/Sprite (unlit), which
+// ignores lights entirely, so adding these doesn't change how anything else
+// looks. Without a light, a continuous MeshLambertMaterial surface would
+// read as a flat, featureless silhouette — no way to see the shape's actual
+// relief, which is the whole point of replacing the old per-cell cubes.
+// The directional light tracks the camera each frame (see the render loop)
+// so relief reads clearly from whatever angle you're currently viewing from.
+scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+const asteroidShapeLight = new THREE.DirectionalLight(0xffffff, 1.1);
+scene.add(asteroidShapeLight);
+scene.add(asteroidShapeLight.target);
+
 const camera = new THREE.PerspectiveCamera(60, viewport.clientWidth / viewport.clientHeight, 0.1, 1e12);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// Logarithmic depth: the scene spans centimeters (terrain right under the
+// camera) to millions of meters (other planets/asteroids), which a normal
+// depth buffer can't resolve at once - surfaces flicker/z-fight and terrain
+// tears when viewed from some angles. Costs a little fill rate, fixes both.
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(viewport.clientWidth, viewport.clientHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1688,14 +2081,24 @@ controls.dampingFactor = 0.08;
 const framingCandidates = POINTS.filter(p => !('trail' in p) || p.velocity);
 const framingPoints = framingCandidates.length ? framingCandidates : POINTS;
 
+// Planets/asteroids are excluded from POINTS entirely, so a channel with
+// only a handful of (or one) live/GPS point far from them would otherwise
+// auto-frame tight on just that point — a view where every planet and
+// asteroid sits millions of meters outside the frustum, effectively
+// "not rendering" even though they're really just off-camera. Folding
+// them into the same bounding box fixes that; the stale-marker exclusion
+// above still keeps a lone dead marker from ruining this on its own.
+const framingSet = [...framingPoints, ...PLANETS, ...ASTEROIDS];
+if (!framingSet.length) framingSet.push(...POINTS);
+
 let cx = 0, cy = 0, cz = 0;
-if (framingPoints.length) {
-  const xs = framingPoints.map(p => p.x), ys = framingPoints.map(p => p.y), zs = framingPoints.map(p => p.z);
+if (framingSet.length) {
+  const xs = framingSet.map(p => p.x), ys = framingSet.map(p => p.y), zs = framingSet.map(p => p.z);
   cx = (Math.min(...xs) + Math.max(...xs)) / 2;
   cy = (Math.min(...ys) + Math.max(...ys)) / 2;
   cz = (Math.min(...zs) + Math.max(...zs)) / 2;
 }
-const span = Math.max(1, ...framingPoints.map(p => Math.hypot(p.x - cx, p.y - cy, p.z - cz)));
+const span = Math.max(1, ...framingSet.map(p => Math.hypot(p.x - cx, p.y - cy, p.z - cz)));
 
 camera.position.set(cx + span * 1.5, cy + span * 1.5, cz + span * 1.5);
 controls.target.set(cx, cy, cz);
@@ -1819,6 +2222,10 @@ const glowTex = new THREE.CanvasTexture(glowCanvas);
 
 const meshes = [];
 const glows = [];
+// Parallel to meshes/glows: the fuzz-uncertainty wireframe sphere for a
+// Pulsar-variant neutral/enemy signal (see createPointVisual/p.radius), or
+// null for every point that isn't one.
+const uncertaintySpheres = [];
 
 // Kept deliberately subdued: points are the densest thing on the map (dozens
 // to hundreds at once), so a bright/bloomy default per-point quickly turns
@@ -1828,12 +2235,42 @@ const POINT_MESH_DIM = 0.55;  // solid-dot color multiplier
 const GLOW_BASE_OPACITY = 0.12; // ambient glow halo opacity (was 0.35)
 const GLOW_SCALE = 5; // ambient glow halo size, in point-radii (was 8)
 
-// Shared sphere geometry (unit size — we scale via mesh.scale)
+// Shared geometries (unit size — we scale via mesh.scale). Only a hostile
+// signal (p.category set) with a known is_static picks station/ship over the
+// plain sphere every GPS point/live player marker uses — see
+// createPointVisual. Station = octahedron (a compact, "installed" silhouette);
+// ship = cone (a directional, "vessel" silhouette) — distinct enough at a
+// glance without needing to orient either one to its velocity.
 const unitSphereGeom = new THREE.SphereGeometry(1, 14, 10);
+const unitStationGeom = new THREE.OctahedronGeometry(1, 0);
+const unitShipGeom = new THREE.ConeGeometry(1, 2, 6);
+
+// Uncertainty-sphere material is per-point (color varies), but every one is
+// a subdued wireframe at TRUE world scale (not scaled by BASE_POINT_SIZE
+// like the marker mesh itself) — same technique as PLANETS/ASTEROIDS, since
+// it represents a real physical uncertainty radius in meters.
+function createUncertaintySphere(p) {
+  if (!p.radius) return null;
+  const geom = new THREE.SphereGeometry(p.radius, 12, 8);
+  const mat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(p.color),
+    wireframe: true,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.set(p.x, p.y, p.z);
+  scene.add(mesh);
+  return mesh;
+}
 
 function createPointVisual(p) {
+  // A hostile signal reports is_static; a GPS point/live player has no
+  // category at all, so it always falls through to the plain sphere.
+  const geom = !p.category ? unitSphereGeom : (p.is_static ? unitStationGeom : unitShipGeom);
   const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(p.color).multiplyScalar(POINT_MESH_DIM) });
-  const m = new THREE.Mesh(unitSphereGeom, mat);
+  const m = new THREE.Mesh(geom, mat);
   m.position.set(p.x, p.y, p.z);
   m.scale.setScalar(BASE_POINT_SIZE);
   m.userData = p;
@@ -1852,14 +2289,87 @@ function createPointVisual(p) {
   sprite.scale.set(BASE_POINT_SIZE * GLOW_SCALE, BASE_POINT_SIZE * GLOW_SCALE, 1);
   scene.add(sprite);
 
-  return { mesh: m, glow: sprite };
+  return { mesh: m, glow: sprite, uncertainty: createUncertaintySphere(p) };
 }
 
 for (const p of pointData) {
-  const { mesh, glow } = createPointVisual(p);
+  const { mesh, glow, uncertainty } = createPointVisual(p);
   meshes.push(mesh);
   glows.push(glow);
+  uncertaintySpheres.push(uncertainty);
 }
+
+// ── WEAPONCORE: MISSILES INBOUND / IN FLIGHT ──────────────────────────────
+// A live player whose ship has missiles locked on it gets a brighter red
+// glow halo instead of its normal color. applyLiveUpdate re-colors glows
+// from p.color every poll, so this re-applies after it (see applyCombatTint
+// calls there).
+const INBOUND_GLOW_COLOR = '#ff2020';
+
+function applyCombatTint(idx) {
+  const p = pointData[idx];
+  const inbound = !!(p.combat && p.combat.incoming_missiles > 0);
+  glows[idx].material.color.set(inbound ? INBOUND_GLOW_COLOR : p.color);
+  glows[idx].material.opacity = inbound ? GLOW_BASE_OPACITY * 4 : GLOW_BASE_OPACITY;
+}
+pointData.forEach((_, i) => applyCombatTint(i));
+
+// Every missile any live player's client is simulating, deduped by id, as a
+// fixed-screen-size point cloud: red if it's locked on one of our players,
+// amber otherwise. Rebuilt from scratch every poll — missiles live seconds,
+// so there's nothing worth diffing. Empty (and invisible) without WeaponCore.
+let missileCloud = null;
+const missileDotTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(16, 2); ctx.lineTo(30, 30); ctx.lineTo(2, 30); ctx.closePath(); // small triangle
+  ctx.fill();
+  return new THREE.CanvasTexture(c);
+})();
+
+function rebuildMissileCloud() {
+  if (missileCloud) {
+    scene.remove(missileCloud);
+    missileCloud.geometry.dispose();
+    missileCloud.material.dispose();
+    missileCloud = null;
+  }
+
+  const inbound = [];
+  const seen = new Map(); // id -> [x,y,z]
+  for (const p of pointData) {
+    const c = p.combat;
+    if (!c || p.hidden) continue;
+    for (const pos of c.incoming_positions || []) inbound.push(pos);
+    for (const m of c.missiles || []) seen.set(m.id, [m.x, m.y, m.z]);
+  }
+  const isInbound = (pos) => inbound.some(q => Math.abs(q[0] - pos[0]) < 1 && Math.abs(q[1] - pos[1]) < 1 && Math.abs(q[2] - pos[2]) < 1);
+  const all = [...seen.values()];
+  for (const pos of inbound) if (!all.some(q => q[0] === pos[0] && q[1] === pos[1] && q[2] === pos[2])) all.push(pos);
+  if (!all.length) return;
+
+  const positions = new Float32Array(all.length * 3);
+  const colors = new Float32Array(all.length * 3);
+  const red = new THREE.Color('#ff3030'), amber = new THREE.Color('#ffb020');
+  all.forEach((pos, i) => {
+    positions.set(pos, i * 3);
+    const col = isInbound(pos) ? red : amber;
+    colors[i * 3] = col.r; colors[i * 3 + 1] = col.g; colors[i * 3 + 2] = col.b;
+  });
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    size: 9, sizeAttenuation: false, map: missileDotTex, vertexColors: true,
+    transparent: true, alphaTest: 0.5, depthWrite: false,
+  });
+  missileCloud = new THREE.Points(geom, mat);
+  scene.add(missileCloud);
+}
+rebuildMissileCloud();
 
 // ── PLANETS ────────────────────────────────────────────────────────────────
 // Real position + radius synced from the plugin (see GameStateReader.
@@ -1933,6 +2443,515 @@ for (const planet of PLANETS) {
   const label = makePlanetLabelSprite(planet.name, planet.radius * 0.6);
   label.position.set(planet.x, planet.y + planet.radius * 1.15, planet.z);
   scene.add(label);
+}
+
+// ── ASTEROIDS ─────────────────────────────────────────────────────────────
+// Same rendering technique as PLANETS above (see that block's comments) —
+// a wireframe sphere at the plugin-reported bounding-sphere radius (see
+// GameStateReader.ReadAsteroids; not a precise physical radius, since
+// asteroids are irregular voxel bodies, not spheres), just in the sidebar's
+// neutral grey instead of planet-orange.
+function makeAsteroidLabelSprite(text, worldSize) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.font = '600 32px system-ui, sans-serif';
+  ctx.fillStyle = '#cccccc'; // matches the grey sidebar icon/asteroid-name color
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = 6;
+  ctx.fillText(text, 128, 32);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(worldSize, worldSize * 0.25, 1);
+  return sprite;
+}
+
+const ASTEROID_COLOR = 0x999999;
+
+// Raycast targets for double-click-to-focus, same role as planetMeshes.
+const asteroidMeshes = [];
+
+// An asteroid's real shape (see AsteroidShape.ReadNextShapes) rather than
+// approximated as a sphere. Keyed by voxel_name to match against ASTEROIDS.
+const shapesByVoxel = {};
+for (const s of SHAPES) shapesByVoxel[s.voxel_name] = s;
+
+// "mesh" shape format: a real triangle surface extracted from the asteroid's
+// voxel data by the plugin (see AsteroidShape.cs), so it can be concave or
+// hollow. Vertices arrive as base64 int16 triples relative to the shape's
+// center (times mesh_scale, in meters) plus base64 uint16 triangle indices.
+// Kept relative to the center with the mesh positioned at the center:
+// world coordinates are in the millions of meters, where float32 only
+// resolves ~0.25-0.5m, so baking them into the vertex buffer would quantize
+// a small rock's surface into steps. Keeping the vertices small lets
+// three.js do the big translation in double precision on the CPU.
+const meshShapeMat = new THREE.MeshLambertMaterial({ color: ASTEROID_COLOR, side: THREE.DoubleSide });
+
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function buildMeshShape(shape) {
+  const vb = b64ToBytes(shape.vertices);
+  const ib = b64ToBytes(shape.indices);
+  const q = new Int16Array(vb.buffer, vb.byteOffset, vb.byteLength >> 1);
+  const positions = new Float32Array(q.length);
+  for (let i = 0; i < q.length; i++) positions[i] = q[i] * shape.mesh_scale;
+  const indices = new Uint16Array(ib.buffer, ib.byteOffset, ib.byteLength >> 1);
+
+  shape._pos = positions; // for measureSurfaceAnchor
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setIndex(new THREE.BufferAttribute(indices, 1));
+  geom.computeVertexNormals();
+  const mesh = new THREE.Mesh(geom, meshShapeMat);
+  mesh.position.set(shape.center_x, shape.center_y, shape.center_z);
+  scene.add(mesh);
+  return mesh;
+}
+
+const lazyMeshQueue = [];
+
+for (const asteroid of ASTEROIDS) {
+  asteroid.worldPos = new THREE.Vector3(asteroid.x, asteroid.y, asteroid.z); // cached for the render loop's far-plane check
+  const shape = shapesByVoxel[asteroid.name];
+
+  const wireGeom = new THREE.SphereGeometry(asteroid.radius, 16, 12);
+  const wireMat = new THREE.MeshBasicMaterial({
+    color: ASTEROID_COLOR,
+    wireframe: true,
+    transparent: true,
+    // Faded further when the real shape is drawn on top of it — it's then
+    // just a faint "how big is this roughly" reference, not the shape itself.
+    opacity: shape ? 0.12 : 0.45,
+    depthWrite: false,
+  });
+  const wireMesh = new THREE.Mesh(wireGeom, wireMat);
+  wireMesh.position.set(asteroid.x, asteroid.y, asteroid.z);
+  wireMesh.userData = asteroid;
+  scene.add(wireMesh);
+  asteroidMeshes.push(wireMesh);
+
+  if (shape && shape.format === 'mesh' && shape.vertices && shape.indices) {
+    buildMeshShape(shape);
+  } else if (shape && shape.format === 'mesh' && shape.lazy_mesh) {
+    lazyMeshQueue.push(shape); // fetched after the loop - see loadLazyMeshes
+  }
+
+  const asteroidGlowMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    color: new THREE.Color(ASTEROID_COLOR),
+    transparent: true,
+    opacity: 0.1,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const asteroidGlow = new THREE.Sprite(asteroidGlowMat);
+  asteroidGlow.position.set(asteroid.x, asteroid.y, asteroid.z);
+  asteroidGlow.scale.set(asteroid.radius * 1.6, asteroid.radius * 1.6, 1);
+  scene.add(asteroidGlow);
+
+  const label = makeAsteroidLabelSprite(asteroid.name, asteroid.radius * 0.6);
+  label.position.set(asteroid.x, asteroid.y + asteroid.radius * 1.15, asteroid.z);
+  scene.add(label);
+}
+
+// The live page embeds only a lazy_mesh flag for each mesh-format asteroid
+// (the mesh blobs are large); pull them in a few at a time and build each as
+// it arrives. Downloaded standalone maps embed the blobs and never get here.
+async function loadLazyMeshes(queue) {
+  let next = 0;
+  const worker = async () => {
+    while (next < queue.length) {
+      const shape = queue[next++];
+      try {
+        const res = await fetch(`/map/asteroid_shape?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}&name=${encodeURIComponent(shape.voxel_name)}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        shape.vertices = data.vertices;
+        shape.indices = data.indices;
+        shape.mesh_scale = data.mesh_scale;
+        buildMeshShape(shape);
+      } catch (e) {
+        // Network hiccup - this asteroid just keeps its faint bounding sphere until the next page load.
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+}
+if (LIVE && lazyMeshQueue.length) loadLazyMeshes(lazyMeshQueue);
+
+// ── PLANET TERRAIN (streamed cube-sphere LOD tiles) ───────────────────────
+// Planet terrain is drawn from LOD tiles streamed on demand, so it can go from
+// a whole-planet overview down to a few meters between samples without ever
+// holding the whole planet at that detail. The scheme is mirrored exactly by
+// the plugin's TerrainTiles.cs: a cube wrapped around the planet, face f in
+// 0..5 split into a 2^level x 2^level grid of tiles, each tile a 65 x 65 grid
+// of distances from the planet's center to its surface along
+// normalize(N[f] + A[f]*u + B[f]*v).
+//
+// Terrain appears once the camera is within TERRAIN_SHOW_ALTITUDE of a
+// planet's surface. Each tile splits into four finer ones while the camera is
+// close to it; a tile is only replaced by its children once all four have
+// arrived, so the view never opens holes while detail streams in. Missing
+// tiles are requested from the server (which asks the game plugin to sample
+// them) and re-requested until they arrive.
+const TERRAIN_SHOW_ALTITUDE = 40000;   // meters above the surface at which terrain appears
+const TERRAIN_GRID = 65;               // samples per tile edge (= TerrainTiles.Grid)
+const TERRAIN_SPLIT_FACTOR = 2.0;      // a tile splits while the camera is within this many tile-edge lengths
+const TERRAIN_MIN_SPACING = 1.0;       // never subdivide past roughly this many meters between samples (~1.5 m on a 60 km planet)
+const TERRAIN_MAX_MESHES = 450;        // built tile meshes kept before the least recently used are dropped
+const TERRAIN_REQUEST_BATCH = 32;
+const TERRAIN_REPOLL_MS = 1200;        // re-ask for a tile the game hasn't delivered yet
+const TERRAIN_BUILDS_PER_FRAME = 3;
+const PLANET_WIRE_OPACITY = 0.6;
+const PLANET_WIRE_OPACITY_NEAR = 0.1;  // the wire sphere fades while real terrain is showing
+// Distance from the camera to the closest drawn terrain surface (Infinity when none) - the render loop
+// pulls the camera's near plane in to match, so ground right under the camera is never clipped.
+let terrainNearestSurface = Infinity;
+const PLANET_RELIEF_EXAGGERATION = 1.0; // >1 stretches mountains/canyons away from the average radius
+
+const TERRAIN_FACE_N = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+const TERRAIN_FACE_A = [[0, 0, -1], [0, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 0], [-1, 0, 0]];
+const TERRAIN_FACE_B = [[0, 1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [0, 1, 0], [0, 1, 0]];
+
+const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+const terrainStates = new Map(); // planet name -> per-planet streaming state
+let terrainFrame = 0;
+const _tvDir = new THREE.Vector3();
+const _tvCam = new THREE.Vector3();
+const _tvCamDir = new THREE.Vector3();
+const _tvTile = new THREE.Vector3();
+
+function terrainDir(f, u, v, out) {
+  const n = TERRAIN_FACE_N[f], a = TERRAIN_FACE_A[f], b = TERRAIN_FACE_B[f];
+  return out.set(n[0] + a[0] * u + b[0] * v, n[1] + a[1] * u + b[1] * v, n[2] + a[2] * u + b[2] * v).normalize();
+}
+
+function getTerrainState(planet) {
+  let st = terrainStates.get(planet.name);
+  if (st) return st;
+  const R = planet.radius;
+  st = {
+    planet,
+    tiles: new Map(),
+    want: [],
+    buildQueue: [],
+    drawn: new Set(),
+    inflight: false,
+    // Finest level whose sample spacing is still >= TERRAIN_MIN_SPACING.
+    maxLevel: Math.max(0, Math.min(11, Math.floor(Math.log2((Math.PI / 2 * R) / ((TERRAIN_GRID - 1) * TERRAIN_MIN_SPACING))))),
+  };
+  terrainStates.set(planet.name, st);
+  return st;
+}
+
+function terrainTile(st, f, l, x, y) {
+  const key = `${f}.${l}.${x}.${y}`;
+  let tile = st.tiles.get(key);
+  if (!tile) {
+    tile = { key, f, l, x, y, data: null, mesh: null, asked: 0, lastUsed: 0, rMid: 0 };
+    st.tiles.set(key, tile);
+  }
+  return tile;
+}
+
+// Direction of a tile's center, and its edge length in meters at the average radius.
+function terrainTileCenterDir(tile, out) {
+  const scale = 2 / (1 << tile.l);
+  return terrainDir(tile.f, -1 + (tile.x + 0.5) * scale, -1 + (tile.y + 0.5) * scale, out);
+}
+
+// One tile's mesh: a (65+2)^2 grid whose outer ring repeats the border
+// samples pushed inward, a "skirt" that hides the cracks where neighboring
+// tiles are at different detail levels. Vertices are relative to the planet's
+// center (mesh positioned there) for float32 precision.
+function buildTerrainTileMesh(st, tile) {
+  const planet = st.planet, R = planet.radius;
+  const G = TERRAIN_GRID, E = G + 2;
+  const n = 1 << tile.l;
+  const edge = (Math.PI / 2) * R / n;
+  const skirtDepth = edge * 0.03;
+  const { min, max, samples } = tile.data;
+  const span = max - min;
+  const scale = 2 / n, u0 = -1 + tile.x * scale, v0 = -1 + tile.y * scale;
+  const reliefRange = R * 0.06;
+  const lo = new THREE.Color(0x2a1400), hi = new THREE.Color(0xc98a3a), c = new THREE.Color();
+
+  const positions = new Float32Array(E * E * 3);
+  const colors = new Float32Array(E * E * 3);
+  const dir = new THREE.Vector3();
+  for (let jj = 0; jj < E; jj++) {
+    const j = Math.min(G - 1, Math.max(0, jj - 1));
+    const v = v0 + scale * j / (G - 1);
+    for (let ii = 0; ii < E; ii++) {
+      const i = Math.min(G - 1, Math.max(0, ii - 1));
+      const u = u0 + scale * i / (G - 1);
+      let r = min + samples[j * G + i] / 65535 * span;
+      r = R + (r - R) * PLANET_RELIEF_EXAGGERATION;
+      const t = Math.min(1, Math.max(0, 0.5 + (r - R) / (2 * reliefRange)));
+      if (ii === 0 || jj === 0 || ii === E - 1 || jj === E - 1) r -= skirtDepth;
+      terrainDir(tile.f, u, v, dir);
+      const k = (jj * E + ii) * 3;
+      positions[k] = dir.x * r; positions[k + 1] = dir.y * r; positions[k + 2] = dir.z * r;
+      c.copy(lo).lerp(hi, t);
+      colors[k] = c.r; colors[k + 1] = c.g; colors[k + 2] = c.b;
+    }
+  }
+
+  const indices = new Uint16Array((E - 1) * (E - 1) * 6);
+  let q = 0;
+  for (let jj = 0; jj < E - 1; jj++) {
+    for (let ii = 0; ii < E - 1; ii++) {
+      const a = jj * E + ii, b = a + 1, d = a + E, e = d + 1;
+      indices[q++] = a; indices[q++] = d; indices[q++] = b;
+      indices[q++] = b; indices[q++] = d; indices[q++] = e;
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geom.setIndex(new THREE.BufferAttribute(indices, 1));
+  geom.computeVertexNormals();
+  geom.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geom, terrainMat);
+  mesh.position.copy(planet.worldPos);
+  mesh.visible = false;
+  scene.add(mesh);
+  tile.mesh = mesh;
+  tile.data = null; // the samples are baked into the geometry now
+}
+
+// Picks the tiles to draw for the planet under the camera (see the header
+// comment) and queues the ones it still needs.
+function selectTerrainTiles(st, camLocal, altitude) {
+  const planet = st.planet, R = planet.radius;
+  const draw = [];
+  st.want.length = 0;
+
+  const camLen = camLocal.length();
+  _tvCamDir.copy(camLocal).divideScalar(camLen || 1);
+  const horizon = Math.acos(Math.min(1, R / Math.max(camLen, R)));
+
+  const culled = (tile) => {
+    if (tile.l < 1) return false;
+    terrainTileCenterDir(tile, _tvDir);
+    const angle = Math.acos(Math.max(-1, Math.min(1, _tvDir.dot(_tvCamDir))));
+    const half = (Math.PI / 2) / (1 << tile.l) * 1.6; // generous angular half-size of the tile
+    return angle > horizon + half;
+  };
+
+  const now = performance.now();
+  const want = (tile) => {
+    if (!tile.data && !tile.mesh && (!tile.asked || now - tile.asked > TERRAIN_REPOLL_MS)) st.want.push(tile);
+  };
+  const loaded = (tile) => !!(tile.data || tile.mesh);
+
+  // parentR: the mid radius of the tile above (the planet's average radius
+  // for a root tile) — used until this tile's own samples have arrived. The
+  // split test measures to the tile's real mid-surface radius, not the
+  // planet's average one: on high relief (mountains/canyons) the two differ
+  // by kilometers, and measuring to the wrong one under-refines exactly the
+  // terrain the camera is closest to.
+  const visit = (f, l, x, y, parentR) => {
+    const tile = terrainTile(st, f, l, x, y);
+    const edge = (Math.PI / 2) * R / (1 << l);
+    const rMid = tile.rMid || parentR;
+    if (l < st.maxLevel) {
+      terrainTileCenterDir(tile, _tvDir);
+      _tvTile.copy(_tvDir).multiplyScalar(rMid);
+      if (_tvTile.distanceTo(camLocal) < edge * TERRAIN_SPLIT_FACTOR) {
+        const kids = [[2 * x, 2 * y], [2 * x + 1, 2 * y], [2 * x, 2 * y + 1], [2 * x + 1, 2 * y + 1]]
+          .map(([kx, ky]) => terrainTile(st, f, l + 1, kx, ky))
+          .filter(k => !culled(k));
+        let ready = true;
+        for (const k of kids) {
+          if (!loaded(k)) { ready = false; want(k); }
+        }
+        if (ready) {
+          for (const k of kids) visit(f, l + 1, k.x, k.y, rMid);
+          return;
+        }
+      }
+    }
+    if (loaded(tile)) draw.push(tile);
+    else want(tile);
+  };
+  for (let f = 0; f < 6; f++) visit(f, 0, 0, 0, R);
+  return draw;
+}
+
+function requestTerrainTiles(st) {
+  if (st.inflight || st.want.length === 0) return;
+  const batch = st.want.slice(0, TERRAIN_REQUEST_BATCH);
+  const now = performance.now();
+  for (const tile of batch) tile.asked = now;
+  st.inflight = true;
+  const url = `/map/terrain_tiles?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}` +
+    `&planet=${encodeURIComponent(st.planet.name)}&keys=${batch.map(t => t.key).join(',')}`;
+  fetch(url)
+    .then(res => (res.ok ? res.json() : null))
+    .then(body => {
+      if (!body) return;
+      for (const t of body.tiles || []) {
+        const tile = st.tiles.get(t.key);
+        if (!tile || tile.data || tile.mesh) continue;
+        const bytes = b64ToBytes(t.data);
+        tile.data = { min: t.min, max: t.max, samples: new Uint16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength >> 1) };
+        tile.rMid = (t.min + t.max) / 2;
+        st.buildQueue.push(tile);
+      }
+    })
+    .catch(() => {})
+    .finally(() => { st.inflight = false; });
+}
+
+function updatePlanetTerrain() {
+  if (!LIVE || PLANETS.length === 0) return;
+  terrainFrame++;
+
+  // Which planet (if any) is close enough for terrain: the one with the
+  // camera nearest its surface, within TERRAIN_SHOW_ALTITUDE.
+  let active = null, activeAlt = Infinity;
+  if (terrainFrame % 6 === 0) {
+    for (const wireMesh of planetMeshes) {
+      const planet = wireMesh.userData;
+      const alt = camera.position.distanceTo(planet.worldPos) - planet.radius;
+      if (alt < TERRAIN_SHOW_ALTITUDE && alt < activeAlt) { active = planet; activeAlt = alt; }
+    }
+
+    for (const wireMesh of planetMeshes) {
+      const planet = wireMesh.userData;
+      const st = terrainStates.get(planet.name);
+      if (planet === active) {
+        const s = getTerrainState(planet);
+        _tvCam.copy(camera.position).sub(planet.worldPos);
+        const draw = selectTerrainTiles(s, _tvCam, activeAlt);
+        const drawnNow = new Set();
+        for (const tile of draw) {
+          if (!tile.mesh) continue;
+          tile.mesh.visible = true;
+          tile.lastUsed = terrainFrame;
+          drawnNow.add(tile);
+        }
+        for (const tile of s.drawn) if (!drawnNow.has(tile) && tile.mesh) tile.mesh.visible = false;
+        s.drawn = drawnNow;
+        // The wire sphere would z-fight/flicker through real terrain, so it
+        // disappears entirely while terrain is drawn (it stays a raycast
+        // target for double-click focus either way).
+        wireMesh.material.opacity = drawnNow.size ? PLANET_WIRE_OPACITY_NEAR : PLANET_WIRE_OPACITY;
+        wireMesh.visible = drawnNow.size === 0;
+
+        let nearest = Infinity;
+        for (const tile of drawnNow) {
+          const bs = tile.mesh.geometry.boundingSphere;
+          if (!bs) continue;
+          _tvTile.copy(bs.center).add(tile.mesh.position);
+          const d = camera.position.distanceTo(_tvTile) - bs.radius;
+          if (d < nearest) nearest = d;
+        }
+        terrainNearestSurface = nearest;
+        requestTerrainTiles(s);
+      } else if (st) {
+        for (const tile of st.drawn) if (tile.mesh) tile.mesh.visible = false;
+        st.drawn.clear();
+        wireMesh.material.opacity = PLANET_WIRE_OPACITY;
+        wireMesh.visible = true;
+      } else {
+        wireMesh.material.opacity = PLANET_WIRE_OPACITY;
+        wireMesh.visible = true;
+      }
+    }
+    if (!active) terrainNearestSurface = Infinity;
+  }
+
+  // Build a few arrived tiles per frame, then trim the cache.
+  let built = 0;
+  for (const st of terrainStates.values()) {
+    while (built < TERRAIN_BUILDS_PER_FRAME && st.buildQueue.length) {
+      const tile = st.buildQueue.shift();
+      if (tile.data && !tile.mesh) { buildTerrainTileMesh(st, tile); built++; }
+    }
+    let meshCount = 0;
+    for (const tile of st.tiles.values()) if (tile.mesh) meshCount++;
+    if (meshCount > TERRAIN_MAX_MESHES) {
+      const idle = [...st.tiles.values()].filter(t => t.mesh && !st.drawn.has(t)).sort((a, b) => a.lastUsed - b.lastUsed);
+      for (const tile of idle.slice(0, meshCount - TERRAIN_MAX_MESHES)) {
+        scene.remove(tile.mesh);
+        tile.mesh.geometry.dispose();
+        tile.mesh = null;
+        tile.asked = 0;
+      }
+    }
+  }
+}
+
+// Ore points are rendered through the normal pointData/mesh pipeline (see
+// oreEntries above and createPointVisual below) — one marker per body,
+// hidden until revealed, rather than a separate always-on ore layer.
+
+// ── ORE VEIN DOTS ─────────────────────────────────────────────────────────
+// An asteroid's single searchable point (see oreEntries) is an averaged
+// position — great for finding the rock, useless for knowing where on it to
+// actually mine. Each asteroid point also carries the exact clustered vein
+// positions that were folded into that average (p.locations); this renders
+// them as a small dot cloud, colored per ore type, shown/hidden together
+// with the parent point (see updateVisibility's sceneVisible).
+const ORE_COLORS = {
+  Iron: '#c0612b', Nickel: '#8fbc8f', Cobalt: '#3a6fd8', Magnesium: '#e8e8ff',
+  Silicon: '#c9b27c', Silver: '#d0d0d0', Gold: '#ffd700', Platinum: '#b8e0f0',
+  Uranium: '#5dff3a', Ice: '#9fe8ff', Stone: '#777777', Scrap: '#8b6b4a',
+};
+const oreColor = (ore) => ORE_COLORS[ore] || '#ffffff';
+
+const oreDotTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(16, 16, 13, 0, Math.PI * 2);
+  ctx.fill();
+  return new THREE.CanvasTexture(c);
+})();
+
+for (const p of oreEntries) {
+  if (!p.locations.length) continue;
+
+  const positions = new Float32Array(p.locations.length * 3);
+  const colors = new Float32Array(p.locations.length * 3);
+  p.locations.forEach((loc, i) => {
+    positions[i * 3] = loc.x;
+    positions[i * 3 + 1] = loc.y;
+    positions[i * 3 + 2] = loc.z;
+    const c = new THREE.Color(oreColor(loc.ore));
+    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+  });
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    size: 7,
+    sizeAttenuation: false,
+    map: oreDotTex,
+    vertexColors: true,
+    transparent: true,
+    alphaTest: 0.5,
+    depthWrite: false,
+  });
+  const cloud = new THREE.Points(geom, mat);
+  cloud.visible = false;
+  scene.add(cloud);
+  p.veinCloud = cloud;
 }
 
 // ── MOVEMENT TRAILS ───────────────────────────────────────────────────────
@@ -2144,7 +3163,6 @@ let pulseRing = null;
 let pulseT = 0;
 const PULSE_MIN_FRAC = 0.02; // ring starts at 2% of camera distance
 const PULSE_MAX_FRAC = 0.3;  // and expands out to 30%
-const PULSE_SPEED = 0.0008; // ~1250 frames per cycle (~21s at 60fps)
 
 // Hit flash state: pointIdx -> { timer }
 const hitFlashes = new Map();
@@ -2357,7 +3375,21 @@ function updateVisibility() {
   for (let i = 0; i < pointData.length; i++) {
     const p = pointData[i];
 
-    const searchMatch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const nameMatch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Ore markers are revealed either by a matching search (a resource name,
+    // "AST", or a planet's name — all plain substrings of p.name) or by
+    // having had their linked asteroid clicked on the map (revealedOreIds).
+    // Unrevealed, they're absent from both the sidebar list and the 3D scene.
+    const oreRevealed = !p.isOre || revealedOreIds.has(p.id) || (!!searchQuery && nameMatch);
+    // Asteroids have no separate list/search of their own any more (see the
+    // old #asteroid-list) — an asteroid's own always-visible body/label is
+    // drawn by the ASTEROIDS/SHAPES scene code regardless, but its point-list
+    // row and this small marker only show up while a search actually
+    // matches its name (no click-to-reveal persistence like ore has).
+    const asteroidRevealed = !p.isAsteroid || (!!searchQuery && nameMatch);
+    const revealed = oreRevealed && asteroidRevealed;
+    const searchMatch = (p.isOre || p.isAsteroid) ? (revealed && nameMatch) : nameMatch;
 
     let filterMatch = true;
     if (currentFilter === 'hidden') filterMatch = p.hidden;
@@ -2372,7 +3404,7 @@ function updateVisibility() {
     // listMatch too, so the sidebar row disappears along with the 3D marker
     // instead of only the scene object.
     const catHidden = !!(p.category && categoryVisible[p.category] === false);
-    const listMatch = searchMatch && filterMatch && !catHidden;
+    const listMatch = searchMatch && filterMatch && !catHidden && !(p.replayGhost && p.hidden);
 
     const item = document.querySelector(`.point-item[data-idx="${i}"]`);
     if (item) {
@@ -2380,15 +3412,21 @@ function updateVisibility() {
       item.classList.toggle('hidden-pt', p.hidden);
     }
 
-    const sceneVisible = !p.hidden && !catHidden;
+    const sceneVisible = !p.hidden && !catHidden && revealed && !p.isPlanetOre;
 
     meshes[i].visible = sceneVisible;
     glows[i].visible = sceneVisible;
     if (trailLines[i]) trailLines[i].visible = sceneVisible;
     if (predictionLines[i]) predictionLines[i].visible = sceneVisible;
     if (lockLines[i]) lockLines[i].visible = sceneVisible;
+    if (uncertaintySpheres[i]) uncertaintySpheres[i].visible = sceneVisible;
+    if (p.veinCloud) p.veinCloud.visible = sceneVisible;
 
-    if (!p.hidden) vis++; else hid++;
+    // An unrevealed ore/asteroid entry counts toward neither VISIBLE nor
+    // HIDDEN — it isn't "hidden" in the manual-toggle sense the HIDDEN stat
+    // and filter mean, it just hasn't been searched for yet. Only points
+    // that are actually eligible to show (revealed) split between the two.
+    if (revealed) { if (!p.hidden) vis++; else hid++; }
     if (listMatch) match++;
   }
 
@@ -2490,6 +3528,17 @@ function updateVisibility() {
   }
 }
 
+// Asteroids no longer get their own sidebar section/search box either —
+// like ore, they surface through the normal search/point-list machinery
+// instead (see asteroidEntries and updateVisibility's asteroidRevealed
+// above). Their always-visible body/label/wireframe in the 3D scene is
+// unrelated to this and still comes from ASTEROIDS/SHAPES directly (see the
+// asteroid mesh-building code further up).
+
+// Ore points no longer get their own sidebar section — they surface through
+// the normal search/point-list machinery instead (see oreEntries and
+// updateVisibility's oreRevealed above).
+
 // ── BUILD LIST ────────────────────────────────────────────────────────────
 const listEl = document.getElementById('point-list');
 
@@ -2562,12 +3611,17 @@ function createListItem(p, i) {
 
   const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
   const isPlayer = p.name.startsWith(PLAYER_MARKER_PREFIX);
+  item.dataset.priority = (isPlayer || isSignal) ? '1' : '0';
 
-  if (LIVE && !p.velocity) {
+  if (LIVE && isSignal) {
+    // Signals get the same unified edit modal as a vault GPS point (color +
+    // Delete, name field hidden — see openEditModal) instead of their own
+    // separate recolor/dismiss buttons, so there's one edit affordance and
+    // one place delete lives, for both kinds of row.
     const editBtn = document.createElement('button');
-    editBtn.className = 'pt-focus'; // reuse the same button styling as focus/visibility
+    editBtn.className = 'pt-focus';
     editBtn.textContent = '✎';
-    editBtn.title = 'Edit name/color';
+    editBtn.title = 'Edit color';
     editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openEditModal(i);
@@ -2575,39 +3629,30 @@ function createListItem(p, i) {
     item.appendChild(editBtn);
   } else if (LIVE && isPlayer) {
     // Live player markers can't be renamed (the name is the player's own
-    // name), only recolored — a dedicated color-only editor rather than
-    // reusing the name+color edit modal.
+    // name) or deleted, only recolored — a dedicated color-only editor
+    // rather than reusing the name+color+delete edit modal, UNLESS this
+    // row is part of an active multi-selection, in which case it defers to
+    // the same bulk-aware openEditModal every other kind uses (see there).
     const recolorBtn = document.createElement('button');
     recolorBtn.className = 'pt-focus';
     recolorBtn.textContent = '✎';
     recolorBtn.title = 'Recolor';
     recolorBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      editPlayerColor(i);
+      if (selectedIndices.size > 1 && selectedIndices.has(i)) openEditModal(i);
+      else editPlayerColor(i);
     });
     item.appendChild(recolorBtn);
-  }
-
-  if (LIVE && isSignal) {
-    const recolorBtn = document.createElement('button');
-    recolorBtn.className = 'pt-focus';
-    recolorBtn.textContent = '✎';
-    recolorBtn.title = 'Recolor';
-    recolorBtn.addEventListener('click', (e) => {
+  } else if (LIVE && !p.velocity && !p.isOre && !p.isAsteroid) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'pt-focus'; // reuse the same button styling as focus/visibility
+    editBtn.title = 'Edit name/color';
+    editBtn.textContent = '✎';
+    editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      editSignalColor(i);
+      openEditModal(i);
     });
-    item.appendChild(recolorBtn);
-
-    const dismissBtn = document.createElement('button');
-    dismissBtn.className = 'pt-focus'; // reuse the same button styling as focus/visibility
-    dismissBtn.textContent = '✕';
-    dismissBtn.title = 'Dismiss signal';
-    dismissBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      dismissSignal(i);
-    });
-    item.appendChild(dismissBtn);
+    item.appendChild(editBtn);
   }
 
   // Shift-click normally extends a text selection starting at mousedown,
@@ -2639,13 +3684,35 @@ function createListItem(p, i) {
   return item;
 }
 
+// Inserts a list item, keeping player/signal markers (see isPriorityPoint)
+// grouped above ordinary GPS waypoints while preserving arrival order within
+// each group.
+function appendListItem(item, p) {
+  if (isPriorityPoint(p)) {
+    const firstOrdinary = listEl.querySelector('.point-item[data-priority="0"]');
+    if (firstOrdinary) {
+      listEl.insertBefore(item, firstOrdinary);
+      return;
+    }
+  }
+  listEl.appendChild(item);
+}
+
 for (let i = 0; i < pointData.length; i++) {
-  listEl.appendChild(createListItem(pointData[i], i));
+  const p = pointData[i];
+  if (isPlayerPoint(p)) continue;
+  appendListItem(createListItem(p, i), p);
 }
 
 updateVisibility();
 
 // ── MEASURE MODE ──────────────────────────────────────────────────────────
+// An endpoint is either a GPS/signal/player point ({kind:'point', idx} —
+// idx into pointData) or a planet/asteroid body ({kind:'body', name, x, y,
+// z, radius} — radius is that body's true/bounding-sphere radius, so the
+// reported distance for a body endpoint is measured to its SURFACE, not its
+// center; two point endpoints (radius 0 on both sides) fall back to plain
+// center-to-center distance exactly as before.
 let measureMode = false;
 let measurePts = [null, null];
 let measureLine = null;
@@ -2658,39 +3725,107 @@ function formatDist(d) {
   return { val: (d / 1e3).toFixed(3), unit: 'km' };
 }
 
+// Resolves an endpoint to {name, x, y, z} (its CENTER — see
+// measureSurfaceAnchor for the actual surface point used in distance/line
+// math) regardless of kind, just for the picked-name display. A point's
+// underlying pointData entry can disappear (deleted/dismissed) while still
+// referenced by a stale measurePts slot — returns null then so callers can
+// drop it instead of throwing.
+function measureEntityInfo(entity) {
+  if (!entity) return null;
+  if (entity.kind === 'point') {
+    const p = pointData[entity.idx];
+    if (!p) return null;
+    return { name: p.name, x: p.x, y: p.y, z: p.z };
+  }
+  return { name: entity.name, x: entity.x, y: entity.y, z: entity.z };
+}
+
+function sameMeasureEntity(a, b) {
+  if (!a || !b) return false;
+  if (a.kind !== b.kind) return false;
+  return a.kind === 'point' ? a.idx === b.idx : a.name === b.name;
+}
+
+// Point on `entity`'s own surface closest to `toPos` (its center for a
+// plain point, radius 0) — where the measurement line/dots/distance
+// actually anchor, instead of a body's center. For an asteroid with a real
+// mesh shape (see buildMeshShape), this uses the mesh vertex nearest toPos
+// rather than the bounding-sphere radius, which is the voxel storage's AABB
+// and typically much bigger than the rock itself — using it would report a
+// much-too-short (often zero) distance to anything near the rock. Clamped so
+// the anchor never overshoots past toPos itself, for when toPos is already
+// "inside" the picked radius.
+function measureSurfaceAnchor(entity, toPos) {
+  if (entity.kind === 'point') {
+    const p = pointData[entity.idx];
+    return { x: p.x, y: p.y, z: p.z };
+  }
+
+  const shape = entity.shape;
+
+  // Real mesh: anchor on the mesh vertex nearest the other endpoint.
+  if (shape && shape.format === 'mesh' && shape._pos) {
+    let best = Infinity, bx = 0, by = 0, bz = 0;
+    const pos = shape._pos;
+    for (let i = 0; i < pos.length; i += 3) {
+      const vx = shape.center_x + pos[i], vy = shape.center_y + pos[i + 1], vz = shape.center_z + pos[i + 2];
+      const d = (vx - toPos.x) ** 2 + (vy - toPos.y) ** 2 + (vz - toPos.z) ** 2;
+      if (d < best) { best = d; bx = vx; by = vy; bz = vz; }
+    }
+    return { x: bx, y: by, z: bz };
+  }
+
+  const center = { x: entity.x, y: entity.y, z: entity.z };
+
+  const dx = toPos.x - center.x, dy = toPos.y - center.y, dz = toPos.z - center.z;
+  const centerDist = Math.hypot(dx, dy, dz) || 1;
+  const dir = { x: dx / centerDist, y: dy / centerDist, z: dz / centerDist };
+
+  const r = Math.min(entity.radius || 0, centerDist); // never anchor past the other endpoint
+
+  return { x: center.x + dir.x * r, y: center.y + dir.y * r, z: center.z + dir.z * r };
+}
+
 function updateDistPanel() {
-  const [ai, bi] = measurePts;
+  const [ea, eb] = measurePts;
+  const infoA = measureEntityInfo(ea);
+  const infoB = measureEntityInfo(eb);
   const slotA = document.getElementById('dist-slot-a');
   const slotB = document.getElementById('dist-slot-b');
   const nameA = document.getElementById('dist-name-a');
   const nameB = document.getElementById('dist-name-b');
 
-  if (ai !== null) {
-    nameA.textContent = pointData[ai].name;
+  if (infoA) {
+    nameA.textContent = infoA.name;
     nameA.classList.remove('empty');
     slotA.classList.add('picked');
     document.getElementById('dist-dot-a').style.opacity = '1';
   } else {
-    nameA.textContent = '— select station —';
+    nameA.textContent = '— select point or body —';
     nameA.classList.add('empty');
     slotA.classList.remove('picked');
   }
 
-  if (bi !== null) {
-    nameB.textContent = pointData[bi].name;
+  if (infoB) {
+    nameB.textContent = infoB.name;
     nameB.classList.remove('empty');
     slotB.classList.add('picked');
     document.getElementById('dist-dot-b').style.opacity = '1';
   } else {
-    nameB.textContent = '— select station —';
+    nameB.textContent = '— select point or body —';
     nameB.classList.add('empty');
     slotB.classList.remove('picked');
     document.getElementById('dist-dot-b').style.opacity = '0.3';
   }
 
-  if (ai !== null && bi !== null) {
-    const a = pointData[ai], b = pointData[bi];
-    const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+  if (infoA && infoB) {
+    // Anchor each side toward the OTHER side's center first (a reasonable
+    // single-pass approximation — not iteratively refined toward the
+    // other's own anchor), then measure surface-anchor to surface-anchor.
+    const anchorA = measureSurfaceAnchor(ea, infoB);
+    const anchorB = measureSurfaceAnchor(eb, infoA);
+    const dx = anchorB.x - anchorA.x, dy = anchorB.y - anchorA.y, dz = anchorB.z - anchorA.z;
     const dist = Math.hypot(dx, dy, dz);
     const { val, unit } = formatDist(dist);
 
@@ -2716,7 +3851,7 @@ function updateDistPanel() {
       wrap.appendChild(tick);
     });
 
-    drawMeasureLine(a, b);
+    drawMeasureLine(anchorA, anchorB);
   } else {
     document.getElementById('dist-val').innerHTML = '—';
     document.getElementById('dist-dx').textContent = '—';
@@ -2763,16 +3898,42 @@ document.getElementById('dist-clear').addEventListener('click', () => {
   updateDistPanel();
 });
 
-function pickMeasurePoint(idx) {
+// Shared by picking a GPS/signal/player point (pickMeasurePoint) and
+// picking a planet/asteroid body (pickMeasureBody) — same fill-A-then-B,
+// then restart-from-a-fresh-A behavior either way.
+function pickMeasureEntity(entity) {
   if (measurePts[0] === null) {
-    measurePts[0] = idx;
+    measurePts[0] = entity;
   } else if (measurePts[1] === null) {
-    if (idx !== measurePts[0]) measurePts[1] = idx;
+    if (!sameMeasureEntity(entity, measurePts[0])) measurePts[1] = entity;
   } else {
-    measurePts = [idx, null];
+    measurePts = [entity, null];
     clearMeasureLine();
   }
   updateDistPanel();
+}
+
+function pickMeasurePoint(idx) {
+  // An asteroid's sidebar/search row is a pointData entry (see
+  // asteroidEntries), but should measure the same way clicking its body in
+  // the 3D view does — to its actual surface, not as a radius-0 point —
+  // rather than the two ways of picking the same asteroid disagreeing.
+  const p = pointData[idx];
+  if (p && p.isAsteroid) {
+    const asteroid = ASTEROIDS.find(a => a.name === p.name);
+    if (asteroid) { pickMeasureBody(asteroid); return; }
+  }
+  pickMeasureEntity({ kind: 'point', idx });
+}
+
+function pickMeasureBody(body) {
+  pickMeasureEntity({
+    kind: 'body', name: body.name, x: body.x, y: body.y, z: body.z, radius: body.radius,
+    // Present only for an asteroid with a real mesh shape (see
+    // buildMeshShape) — measureSurfaceAnchor uses it for the true surface
+    // distance instead of the bounding-sphere radius.
+    shape: shapesByVoxel[body.name] || null,
+  });
 }
 
 // ── SELECT / FOCUS ────────────────────────────────────────────────────────
@@ -2783,7 +3944,6 @@ function selectPoint(i) {
   activeIdx = i;
   pulseT = 0; // reset wave animation for new selection
   hitFlashes.clear(); // clear any lingering flash states
-  updateDistanceRings();
   document.querySelector(`.point-item[data-idx="${i}"]`)?.classList.add('active');
 
   const p = pointData[i];
@@ -2797,7 +3957,30 @@ function selectPoint(i) {
   document.getElementById('detail-z').textContent = p.z.toFixed(3);
   document.getElementById('detail-tag').textContent = p.tag || '—';
   updateSpeedRow(p);
+  updateCombatRows(p);
   updateLastSeenDisplays();
+}
+
+// ── WEAPONCORE DETAIL ROWS ────────────────────────────────────────────────
+// Signals can carry a threat rating (a player's WeaponCore threat list) and
+// a DPS estimate (Mindrazer plugin only); live players carry a combat block
+// (ship DPS, in-range flags, missiles locked on them). Rows without data
+// stay hidden, so none of this shows in worlds without WeaponCore.
+const fmtDps = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${Math.round(v)}`;
+
+function updateCombatRows(p) {
+  const show = (id, text) => {
+    document.getElementById(`${id}-row`).style.display = text == null ? 'none' : '';
+    if (text != null) document.getElementById(id).textContent = text;
+  };
+  const c = p.combat;
+  show('detail-threat', p.threat != null ? p.threat.toFixed(2) : null);
+  show('detail-dps', p.dps != null ? fmtDps(p.dps) : null);
+  show('detail-shipdps', c && c.ship_dps != null
+    ? `${fmtDps(c.ship_dps)}${c.ship_peak_dps ? ` (peak ${fmtDps(c.ship_peak_dps)})` : ''}` : null);
+  show('detail-inrange', c && c.ship_dps != null
+    ? (c.in_range_priority ? 'PRIORITY TARGET' : c.in_range_other ? 'TARGETS' : 'NONE') : null);
+  show('detail-missiles', c && c.incoming_missiles > 0 ? `${c.incoming_missiles} INBOUND` : null);
 }
 
 function updateSpeedRow(p) {
@@ -2913,10 +4096,7 @@ setInterval(() => {
   updateActivePlayerCount();
 }, 1000);
 
-// ── DISTANCE RINGS around focused point ──────────────────────────────────
-const RING_RADII_KM = [5, 10, 25]; // km
-const distanceRings = []; // { line, radiusM }
-
+// Circle around `center` in the plane facing the camera (used by the pulse wave).
 function buildRingGeometry(center, radiusM, camDir) {
   // Build a circle in the plane perpendicular to camDir
   const up = new THREE.Vector3(0, 1, 0);
@@ -2937,12 +4117,6 @@ function buildRingGeometry(center, radiusM, camDir) {
     ));
   }
   return new THREE.BufferGeometry().setFromPoints(pts);
-}
-
-function updateDistanceRings() {
-  // Static rings removed — only pulse wave used now
-  for (const r of distanceRings) scene.remove(r.line);
-  distanceRings.length = 0;
 }
 
 function panCameraTo(x, y, z) {
@@ -3244,6 +4418,122 @@ document.getElementById('category-modal-backdrop').addEventListener('click', (e)
   if (e.target.id === 'category-modal-backdrop') closeCategoryModal();
 });
 
+// ── PLAYERS PANEL (top-right HUD button) ─────────────────────────────────
+// Every player who has ever connected to this channel with a sync token —
+// see /map/players in sync_api.py and the known_players table. Distinct
+// from pointData's live "currently online" markers: this is the durable
+// roster, with first-seen ("login") and last-seen times that persist even
+// after a player's marker/trail have expired off the map.
+function formatTimestamp(unixSeconds) {
+  const d = new Date(unixSeconds * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function openPlayersModal() {
+  const listEl = document.getElementById('players-list');
+  const emptyEl = document.getElementById('players-empty');
+  listEl.innerHTML = 'Loading…';
+  emptyEl.style.display = 'none';
+  document.getElementById('players-panel').classList.add('open');
+  document.getElementById('players-panel-toggle').classList.add('open');
+  document.body.classList.add('players-panel-open');
+
+  let data;
+  try {
+    const res = await fetch(`/map/players?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}`);
+    if (!res.ok) throw new Error('request failed');
+    data = await res.json();
+  } catch (e) {
+    listEl.innerHTML = '';
+    emptyEl.textContent = 'Failed to load players — try again.';
+    emptyEl.style.display = '';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  if (!data.players.length) {
+    emptyEl.textContent = 'No players have synced into this channel yet.';
+    emptyEl.style.display = '';
+    return;
+  }
+
+  // Roster entries currently online get the exact same list item the GPS
+  // sidebar uses (createListItem) — colored dot, focus-camera button,
+  // recolor button, and click/shift-click/ctrl-click selection wired into
+  // the same selectedIndices/pointData state — instead of a dead name-only
+  // row, so a live player is just as focusable/selectable from here as from
+  // the (now player-less, see isPlayerPoint below) GPS list. An offline
+  // roster entry has no map position to focus/select, so it stays a plain
+  // history row.
+  const liveIndexByPlayerName = new Map();
+  pointData.forEach((p, i) => {
+    if (isPlayerPoint(p)) liveIndexByPlayerName.set(p.name.slice(PLAYER_MARKER_PREFIX.length), i);
+  });
+
+  const nowSeconds = Date.now() / 1000;
+  for (const player of data.players) {
+    const row = document.createElement('div');
+    row.className = 'player-row';
+
+    const liveIdx = liveIndexByPlayerName.get(player.name);
+    if (liveIdx !== undefined) {
+      row.appendChild(createListItem(pointData[liveIdx], liveIdx));
+    } else {
+      const name = document.createElement('div');
+      name.className = 'player-row-name';
+      name.textContent = player.name;
+      row.appendChild(name);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'player-row-meta';
+    const lastSeenAgo = formatAgo(nowSeconds - player.last_seen_at);
+    const metaLines = liveIdx !== undefined
+      ? [`Online now · first login: ${formatTimestamp(player.first_seen_at)}`]
+      : [
+          `First login: ${formatTimestamp(player.first_seen_at)}`,
+          `Last seen: ${lastSeenAgo} (${formatTimestamp(player.last_seen_at)})`,
+        ];
+    if (player.token_label) metaLines.push(`Token: ${player.token_label}`);
+    metaLines.forEach((line, idx) => {
+      if (idx > 0) meta.appendChild(document.createElement('br'));
+      meta.appendChild(document.createTextNode(line));
+    });
+    row.appendChild(meta);
+
+    listEl.appendChild(row);
+  }
+
+  // Cap the visible list to exactly 5 rows (scrolling for the rest) by
+  // measuring their *actual* rendered height rather than guessing a fixed
+  // pixel value — an online row (reused .point-item + meta line) and an
+  // offline row (name + meta) aren't the same height.
+  const rows = listEl.querySelectorAll('.player-row');
+  if (rows.length > 5) {
+    let height = 0;
+    for (let i = 0; i < 5; i++) height += rows[i].offsetHeight;
+    listEl.style.maxHeight = `${height}px`;
+  } else {
+    listEl.style.maxHeight = '';
+  }
+}
+
+function closePlayersModal() {
+  document.getElementById('players-panel').classList.remove('open');
+  document.getElementById('players-panel-toggle').classList.remove('open');
+  document.body.classList.remove('players-panel-open');
+}
+
+// Tab toggles like the left #sidebar-toggle does: open if closed, close if
+// already open — re-fetches fresh roster/online data on every open rather
+// than just re-showing stale content.
+document.getElementById('players-panel-toggle').addEventListener('click', () => {
+  const isOpen = document.getElementById('players-panel').classList.contains('open');
+  if (isOpen) closePlayersModal();
+  else openPlayersModal();
+});
+
 // ── FILTER BUTTONS ───────────────────────────────────────────────────────
 document.getElementById('filter-bar').addEventListener('click', (e) => {
   const btn = e.target.closest('.filter-btn');
@@ -3270,11 +4560,9 @@ function updateBulkButtonLabels() {
   const scoped = selectedIndices.size > 1;
   document.getElementById('btn-show-all').textContent = scoped ? 'SHOW SELECTED' : 'SHOW ALL';
   document.getElementById('btn-hide-all').textContent = scoped ? 'HIDE SELECTED' : 'HIDE ALL';
-  // Recolor/delete only make sense against an actual multi-selection (never
-  // "every point on the map") and only in the live editable view.
-  const showBulkEdit = !!LIVE && scoped;
-  document.getElementById('btn-bulk-recolor').style.display = showBulkEdit ? '' : 'none';
-  document.getElementById('btn-bulk-delete').style.display = showBulkEdit ? '' : 'none';
+  // Recolor/delete used to be separate "…SELECTED" buttons here; now any
+  // selected row's own edit (✎) button opens the unified edit modal in
+  // bulk mode instead (see openEditModal) — nothing to toggle for that here.
 }
 
 document.getElementById('btn-show-all').addEventListener('click', () => {
@@ -3287,85 +4575,6 @@ document.getElementById('btn-hide-all').addEventListener('click', () => {
   const targets = selectedIndices.size > 1 ? selectedIndices : pointData.map((_, i) => i);
   for (const i of targets) setPointHidden(i, true);
   updateVisibility();
-});
-
-// Bulk recolor: vault points and live player markers both go through
-// /map/edit_point with the name unchanged (recolor-only); signals have
-// their own /map/edit_signal_color (no name at all). Requests run in
-// parallel — this is a UI convenience over N single-item edits, not a new
-// server-side bulk endpoint.
-document.getElementById('btn-bulk-recolor').addEventListener('click', async () => {
-  const targets = [...selectedIndices];
-  if (!targets.length) return;
-
-  const picked = await pickColor(pointData[targets[0]].color, `Recolor ${targets.length} selected`);
-  if (!picked) return;
-
-  const results = await Promise.all(targets.map(async (idx) => {
-    const p = pointData[idx];
-    const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
-    try {
-      const response = await fetch(isSignal ? '/map/edit_signal_color' : '/map/edit_point', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isSignal
-          ? { guild_id: LIVE.guildId, channel_id: LIVE.channelId, signal_id: p.signal_id, color: picked }
-          : { guild_id: LIVE.guildId, channel_id: LIVE.channelId, old_name: p.name, new_name: p.name, color: picked }),
-      });
-      if (!response.ok) return false;
-      p.color = picked;
-      applyPointColorVisuals(idx);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }));
-
-  const failed = results.filter(ok => !ok).length;
-  showToast(failed
-    ? `Recolored ${results.length - failed}/${results.length} — ${failed} failed.`
-    : `Recolored ${results.length} point(s).`, !!failed);
-});
-
-// Bulk delete: live player markers have no delete concept (they just expire
-// naturally) — silently excluded from the selection rather than erroring.
-document.getElementById('btn-bulk-delete').addEventListener('click', async () => {
-  const targets = [...selectedIndices].filter(idx => !pointData[idx].name.startsWith(PLAYER_MARKER_PREFIX));
-  if (!targets.length) {
-    showToast("Nothing deletable in the selection — live player markers can't be deleted.", true);
-    return;
-  }
-
-  if (!await confirmDialog(`Delete ${targets.length} selected point(s)? This cannot be undone.`, 'DELETE SELECTED')) return;
-
-  const results = await Promise.all(targets.map(async (idx) => {
-    const p = pointData[idx];
-    const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
-    try {
-      const response = await fetch(isSignal ? '/map/delete_signal' : '/map/delete_point', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isSignal
-          ? { guild_id: LIVE.guildId, channel_id: LIVE.channelId, signal_id: p.signal_id }
-          : { guild_id: LIVE.guildId, channel_id: LIVE.channelId, name: p.name }),
-      });
-      // A 400 here is realistically "not found" (already gone — see the
-      // single-item dismiss/delete flows' same "not found" -> already
-      // cleared handling) since routing/name are correct by construction.
-      if (response.ok || response.status === 400) {
-        hidePointLocally(idx);
-        return true;
-      }
-      return false;
-    } catch (e) {
-      return false;
-    }
-  }));
-
-  const failed = results.filter(ok => !ok).length;
-  showToast(failed
-    ? `Deleted ${results.length - failed}/${results.length} — ${failed} failed.`
-    : `Deleted ${results.length} point(s).`, !!failed);
 });
 
 // ── SIDEBAR TOGGLE ───────────────────────────────────────────────────────
@@ -3438,6 +4647,36 @@ renderer.domElement.addEventListener('click', (e) => {
         list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
       }
     }
+    return;
+  }
+
+  // No GPS/live marker hit — while measuring, a planet or asteroid body
+  // (its wireframe sphere) is a valid endpoint too, measured to its surface
+  // rather than its center (see measureEntityInfo/surfaceAnchor above).
+  // Both mesh lists are tested together, nearest hit wins, so a planet
+  // that happens to render behind a closer asteroid (or vice versa) from
+  // this angle doesn't always lose to whichever list happened to be
+  // checked first.
+  if (measureMode) {
+    const bodyHit = raycaster.intersectObjects([...planetMeshes, ...asteroidMeshes], false)[0];
+    if (bodyHit) pickMeasureBody(bodyHit.object.userData);
+    return;
+  }
+
+  // Clicking an asteroid reveals its ore point (see oreEntries/
+  // revealedOreIds above), so ore info only ever shows up on demand instead
+  // of cluttering the sidebar/scene by default.
+  const asteroidHit = raycaster.intersectObjects(asteroidMeshes, false)[0];
+  if (asteroidHit) {
+    const asteroid = asteroidHit.object.userData;
+    let revealedAny = false;
+    for (const p of pointData) {
+      if (p.isOre && p.voxelName === asteroid.name && !revealedOreIds.has(p.id)) {
+        revealedOreIds.add(p.id);
+        revealedAny = true;
+      }
+    }
+    if (revealedAny) updateVisibility();
   }
 });
 
@@ -3464,6 +4703,13 @@ renderer.domElement.addEventListener('dblclick', (e) => {
   if (planetHit) {
     const planet = planetHit.object.userData;
     panCameraTo(planet.x, planet.y, planet.z);
+    return;
+  }
+
+  const asteroidHit = raycaster.intersectObjects(asteroidMeshes, false)[0];
+  if (asteroidHit) {
+    const asteroid = asteroidHit.object.userData;
+    panCameraTo(asteroid.x, asteroid.y, asteroid.z);
   }
 });
 
@@ -3493,6 +4739,7 @@ window.addEventListener('resize', resizeRenderer);
 const byName = new Map(pointData.map(p => [p.name, p]));
 
 async function pollLiveData() {
+  if (replayMode) return; // paused on a past frame — see REPLAY below
   try {
     const res = await fetch(`/map/live?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}`);
     if (!res.ok) return;
@@ -3511,6 +4758,10 @@ function addLivePoint(fresh, extra) {
     type: extractType(fresh.name),
     hidden: false,
     removedByServer: false,
+    // Created only to show a past frame during replay (e.g. a since-deleted
+    // point) — dropped from the sidebar again once it's gone from a frame,
+    // and adopted as a normal point if a live update confirms it exists.
+    replayGhost: replayMode,
     id: idx,
     trail: (extra && extra.trail) || [],
     velocity: (extra && extra.velocity) || null,
@@ -3518,6 +4769,11 @@ function addLivePoint(fresh, extra) {
     lastSeenAt: (extra && extra.last_seen_at) || null,
     signal_id: (extra && extra.signal_id) || null,
     category: (extra && extra.category) || null,
+    is_static: (extra && extra.is_static) || false,
+    radius: (extra && extra.radius) || null,
+    threat: (extra && extra.threat != null) ? extra.threat : null,
+    dps: (extra && extra.dps != null) ? extra.dps : null,
+    combat: (extra && extra.combat) || null,
     weaponLock: (extra && extra.weapon_lock) || null,
     basePos: { x: fresh.x, y: fresh.y, z: fresh.z },
     lastUpdateAt: Date.now(),
@@ -3525,14 +4781,15 @@ function addLivePoint(fresh, extra) {
   pointData.push(p);
   byName.set(p.name, p);
 
-  const { mesh, glow } = createPointVisual(p);
+  const { mesh, glow, uncertainty } = createPointVisual(p);
   meshes.push(mesh);
   glows.push(glow);
+  uncertaintySpheres.push(uncertainty);
   trailLines.push(buildTrailLine(p));
   predictionLines.push(buildPredictionLine(p));
   lockLines.push(buildLockLine(p));
 
-  listEl.appendChild(createListItem(p, idx));
+  if (!isPlayerPoint(p)) appendListItem(createListItem(p, idx), p);
   updateLastSeenDisplays();
   updateLockDisplays();
   return p;
@@ -3560,6 +4817,7 @@ function applyLiveUpdate(data) {
     // drift the extrapolation accumulated since the last poll.
     p.basePos = { x: fresh.x, y: fresh.y, z: fresh.z };
     p.lastUpdateAt = Date.now();
+    if (!replayMode) p.replayGhost = false;
     if (p.removedByServer) {
       // Reappeared after being removed server-side — restore visibility.
       // A point the user manually hid (removedByServer stays false) is left alone.
@@ -3571,13 +4829,26 @@ function applyLiveUpdate(data) {
     meshes[idx].material.color.set(p.color).multiplyScalar(POINT_MESH_DIM);
     glows[idx].position.set(p.x, p.y, p.z);
     glows[idx].material.color.set(p.color);
+    if (uncertaintySpheres[idx]) {
+      uncertaintySpheres[idx].position.set(p.x, p.y, p.z);
+      uncertaintySpheres[idx].material.color.set(p.color);
+    }
 
     p.trail = (extra && extra.trail) || [];
     p.velocity = (extra && extra.velocity) || null;
     p.prediction = (extra && extra.prediction) || [];
     p.lastSeenAt = (extra && extra.last_seen_at) || null;
     p.category = (extra && extra.category) || null;
+    // is_static/radius are read only at marker creation (createPointVisual):
+    // swapping station/ship geometry or adding/removing the uncertainty
+    // sphere post-creation would need rebuilding the mesh, and neither one
+    // realistically changes for a given signal_id after the fact.
     p.weaponLock = (extra && extra.weapon_lock) || null;
+    p.threat = (extra && extra.threat != null) ? extra.threat : null;
+    p.dps = (extra && extra.dps != null) ? extra.dps : null;
+    p.combat = (extra && extra.combat) || null;
+    applyCombatTint(idx);
+    if (activeIdx === idx) updateCombatRows(p);
     updateTrailLine(idx);
     updatePredictionLine(idx);
     updateLockLine(idx);
@@ -3595,8 +4866,12 @@ function applyLiveUpdate(data) {
   // Anything tracked here but absent from the fresh list was removed
   // server-side (e.g. deleted via a Discord command) — hide it in place.
   // Points already hidden (manually or previously removed) are left as-is.
+  // Ore/asteroid entries are never part of data.points to begin with (see
+  // oreEntries/asteroidEntries above) — without this guard every one of
+  // them would look "removed" on the very first poll and get stuck hidden,
+  // permanently breaking their reveal-by-search behavior.
   for (const [name, p] of byName) {
-    if (freshByName.has(name) || p.hidden) continue;
+    if (freshByName.has(name) || p.hidden || p.isOre || p.isAsteroid) continue;
     p.hidden = true;
     p.removedByServer = true;
     structureChanged = true;
@@ -3612,10 +4887,312 @@ function applyLiveUpdate(data) {
   }
 
   if (structureChanged) updateVisibility();
+  rebuildMissileCloud();
 }
 
 if (LIVE) {
   setInterval(pollLiveData, LIVE.pollMs);
+}
+
+// ── REPLAY ───────────────────────────────────────────────────────────────
+// Rewinds the map through recorded history (see /map/replay in
+// sync_api.py) instead of polling /map/live. Reuses applyLiveUpdate as-is —
+// /map/replay returns the exact same {points, extras} shape /map/live does,
+// just anchored at a past timestamp — so a replay frame renders through the
+// same code path a live poll does. What's different is everything AROUND
+// that: pollLiveData is paused (see its `if (replayMode) return` above) and
+// so is updateLiveDeadReckoning's between-poll extrapolation (see its own
+// early return below) — without that, a marker would keep flying off along
+// its last-known velocity while the scrubber sits paused on one frame.
+let replayMode = false;
+let replayBarOpen = false;
+let replayBounds = null;   // {min_ts, max_ts} — server clock, not the client's
+let replayTs = null;
+let replayPlaying = false;
+let replayFetchToken = 0;  // guards against an in-flight fetch resolving out of order after a later scrub
+let replayOpenGen = 0;     // guards against enterReplayMode resolving after a fast toggle-off-then-on
+
+// datetime-local's value ("YYYY-MM-DDTHH:mm:ss") carries no timezone — the
+// browser displays and edits it in the viewer's own local time, so building
+// it from Date's local (not UTC) getters is what actually localizes the
+// scrubber instead of always showing UTC. localInputValueToTs is the
+// inverse: the Date constructor parses that same timezone-less string as
+// local time too, matching what the input shows.
+function tsToLocalInputValue(ts) {
+  const d = new Date(ts * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
+         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function localInputValueToTs(value) {
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms / 1000;
+}
+
+function updateReplayTimeLabel() {
+  const input = document.getElementById('replay-time-input');
+  // Don't overwrite what the viewer is actively typing/picking.
+  if (document.activeElement === input) return;
+  input.value = replayTs === null ? '' : tsToLocalInputValue(replayTs);
+}
+
+async function fetchReplayFrame() {
+  const token = ++replayFetchToken;
+  updateReplayTimeLabel();
+  try {
+    const res = await fetch(`/map/replay?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}&ts=${replayTs}`);
+    if (!res.ok || token !== replayFetchToken) return;
+    const data = await res.json();
+    if (token !== replayFetchToken) return; // a newer scrub/tick has already superseded this response
+    applyLiveUpdate(data);
+  } catch (e) {
+    // Network hiccup — the next scrub/tick will retry.
+  }
+}
+
+// scheduleReplayFetch used to just debounce on a 120ms timer, which only
+// ever fires once the user stops dragging — so a fast scrub showed nothing
+// moving until the bar came to rest, then jumped straight to the final
+// frame. That's the "lag" during fast scrubbing: it wasn't a slow request,
+// it was zero requests while the pointer was still moving.
+//
+// Instead this runs at most one /map/replay request at a time and, the
+// moment it resolves, immediately re-fires for wherever the slider is now if
+// it moved again in the meantime — no fixed wait between frames. That makes
+// playback run exactly as fast as the network/DB round trip allows: quick
+// enough locally to feel like continuous motion, and it can never pile up a
+// backlog of stale in-flight requests behind a slow one (fetchReplayFrame's
+// own replayFetchToken still drops any response an even-newer scrub has
+// already superseded).
+let replayFetchInFlight = false;
+let replayFetchQueued = false;
+
+function scheduleReplayFetch() {
+  replayFetchQueued = true;
+  runQueuedReplayFetch();
+}
+
+function runQueuedReplayFetch() {
+  if (replayFetchInFlight || !replayFetchQueued) return;
+  replayFetchQueued = false;
+  replayFetchInFlight = true;
+  fetchReplayFrame().finally(() => {
+    replayFetchInFlight = false;
+    if (replayFetchQueued) runQueuedReplayFetch();
+  });
+}
+
+function setReplayPlaying(playing) {
+  replayPlaying = playing;
+  document.getElementById('replay-playpause-btn').innerHTML = playing ? '&#9208;' : '&#9654;';
+}
+
+function closeReplayBarUi() {
+  replayBarOpen = false;
+  document.getElementById('replay-bar').classList.remove('open');
+  document.body.classList.remove('replay-bar-open');
+}
+
+async function enterReplayMode() {
+  // Captured before the await: if the bar gets toggled closed-then-open (or
+  // just closed) again before this resolves, this call's result is stale —
+  // bail rather than flip replayMode on under a bar the user already closed,
+  // or clobber a newer enterReplayMode's state.
+  const gen = ++replayOpenGen;
+  let bounds;
+  try {
+    const res = await fetch(`/map/replay_bounds?guild_id=${LIVE.guildId}&channel_id=${LIVE.channelId}`);
+    bounds = res.ok ? await res.json() : null;
+  } catch (e) {
+    bounds = null;
+  }
+  if (gen !== replayOpenGen) return;
+  if (!bounds || !bounds.bounds) {
+    showToast('No history recorded yet to replay.', true);
+    closeReplayBarUi();
+    return;
+  }
+  replayBounds = { min: bounds.bounds.min_ts, max: bounds.now };
+  replayMode = true;
+  replayTs = replayBounds.max;
+  const slider = document.getElementById('replay-slider');
+  slider.min = Math.floor(replayBounds.min);
+  slider.max = Math.floor(replayBounds.max);
+  slider.value = Math.floor(replayTs);
+  const timeInput = document.getElementById('replay-time-input');
+  timeInput.min = tsToLocalInputValue(replayBounds.min);
+  timeInput.max = tsToLocalInputValue(replayBounds.max);
+  scheduleReplayFetch();
+}
+
+function exitReplayMode() {
+  replayOpenGen++;    // invalidate any enterReplayMode still waiting on its bounds fetch
+  replayFetchToken++; // invalidate any already in-flight fetchReplayFrame request
+  replayFetchQueued = false; // drop a queued-but-not-yet-fired scrub so it can't fire after exit
+  clearTimeout(replayHoldTimer);
+  if (replayHoldActive) endReplayHold();
+  if (!replayMode) return;
+  replayMode = false;
+  setReplayPlaying(false);
+  // Drop dead reckoning's velocity instead of just re-anchoring lastUpdateAt
+  // — basePos is still wherever the paused replay frame left it, so
+  // extrapolating from "now" with the old velocity would fly the marker off
+  // from that stale position for the ~3s until the next live poll corrects
+  // it. Nulling velocity makes updateLiveDeadReckoning skip the point
+  // entirely (it checks `!p.velocity`) until that poll repopulates it.
+  for (const p of pointData) p.velocity = null;
+  pollLiveData();
+}
+
+document.getElementById('replay-toggle-btn').addEventListener('click', () => {
+  replayBarOpen = !replayBarOpen;
+  document.getElementById('replay-bar').classList.toggle('open', replayBarOpen);
+  document.body.classList.toggle('replay-bar-open', replayBarOpen);
+  if (replayBarOpen) enterReplayMode();
+  else exitReplayMode();
+});
+
+document.getElementById('replay-resume-btn').addEventListener('click', () => {
+  closeReplayBarUi();
+  exitReplayMode();
+});
+
+document.getElementById('replay-slider').addEventListener('input', (e) => {
+  if (!replayMode) return;
+  setReplayPlaying(false);
+  replayTs = Number(e.target.value);
+  scheduleReplayFetch();
+});
+
+// Typing an exact time (or picking one from the native calendar/clock
+// popup) jumps the scrubber straight there — 'change' rather than 'input' so
+// this fires once typing/picking is actually done, not on every keystroke.
+document.getElementById('replay-time-input').addEventListener('change', (e) => {
+  if (!replayMode || !replayBounds) return;
+  const ts = localInputValueToTs(e.target.value);
+  if (ts === null) {
+    updateReplayTimeLabel(); // invalid/cleared input — restore the last-known value
+    return;
+  }
+  setReplayPlaying(false);
+  replayTs = Math.min(replayBounds.max, Math.max(replayBounds.min, ts));
+  document.getElementById('replay-slider').value = Math.floor(replayTs);
+  updateReplayTimeLabel(); // reflect the clamp immediately rather than waiting on the fetch
+  scheduleReplayFetch();
+});
+
+document.getElementById('replay-playpause-btn').addEventListener('click', () => {
+  if (!replayMode) return;
+  setReplayPlaying(!replayPlaying);
+});
+
+const REPLAY_STEP_SECONDS = 10;      // one tap = 10s; each further rapid tap adds another 10s
+const REPLAY_HOLD_DELAY_MS = 350;    // press-and-hold threshold before continuous scrubbing kicks in
+const REPLAY_HOLD_TARGET_SECONDS = 120; // holding through the *entire* visible history takes at most this long
+const REPLAY_HOLD_TICK_MS = 100;
+
+function stepReplay(deltaSeconds) {
+  if (!replayMode || !replayBounds) return;
+  setReplayPlaying(false);
+  replayTs = Math.min(replayBounds.max, Math.max(replayBounds.min, replayTs + deltaSeconds));
+  document.getElementById('replay-slider').value = Math.floor(replayTs);
+  updateReplayTimeLabel(); // reflect the clamp immediately rather than waiting on the fetch
+  scheduleReplayFetch();
+}
+
+// Rewind/fast-forward: a quick tap steps by REPLAY_STEP_SECONDS (repeated
+// rapid taps just keep adding another step, same as any button click).
+// Holding past REPLAY_HOLD_DELAY_MS instead starts continuously scrubbing at
+// a speed scaled to the replay window's own span, so holding all the way
+// through never takes longer than REPLAY_HOLD_TARGET_SECONDS regardless of
+// whether the window is 1 hour or 24.
+let replayHoldTimer = null;
+let replayHoldInterval = null;
+let replayHoldActive = false;
+let replayHoldLastTickMs = null;
+
+function replayHoldSpeed() {
+  if (!replayBounds) return 0;
+  const span = Math.max(1, replayBounds.max - replayBounds.min);
+  return span / REPLAY_HOLD_TARGET_SECONDS; // simulated seconds per real second
+}
+
+function beginReplayHold(direction) {
+  replayHoldActive = true;
+  replayHoldLastTickMs = Date.now();
+  setReplayPlaying(false);
+  const speed = replayHoldSpeed();
+  replayHoldInterval = setInterval(() => {
+    const nowMs = Date.now();
+    const dt = (nowMs - replayHoldLastTickMs) / 1000;
+    replayHoldLastTickMs = nowMs;
+    replayTs = Math.min(replayBounds.max, Math.max(replayBounds.min, replayTs + direction * speed * dt));
+    document.getElementById('replay-slider').value = Math.floor(replayTs);
+    updateReplayTimeLabel();
+    scheduleReplayFetch();
+    if (replayTs <= replayBounds.min || replayTs >= replayBounds.max) endReplayHold();
+  }, REPLAY_HOLD_TICK_MS);
+}
+
+function endReplayHold() {
+  clearInterval(replayHoldInterval);
+  replayHoldInterval = null;
+  replayHoldActive = false;
+}
+
+function attachReplayStepButton(buttonId, direction) {
+  const btn = document.getElementById(buttonId);
+  let holdTriggered = false;
+
+  function onPress(e) {
+    if (!replayMode || !replayBounds) return;
+    e.preventDefault();
+    holdTriggered = false;
+    clearTimeout(replayHoldTimer);
+    replayHoldTimer = setTimeout(() => {
+      holdTriggered = true;
+      beginReplayHold(direction);
+    }, REPLAY_HOLD_DELAY_MS);
+  }
+
+  function onRelease() {
+    clearTimeout(replayHoldTimer);
+    if (replayHoldActive) {
+      endReplayHold();
+    } else if (!holdTriggered) {
+      stepReplay(direction * REPLAY_STEP_SECONDS);
+    }
+    holdTriggered = false;
+  }
+
+  btn.addEventListener('pointerdown', onPress);
+  btn.addEventListener('pointerup', onRelease);
+  btn.addEventListener('pointerleave', onRelease);
+  btn.addEventListener('pointercancel', onRelease);
+}
+
+attachReplayStepButton('replay-rewind-btn', -1);
+attachReplayStepButton('replay-forward-btn', 1);
+
+const REPLAY_PLAY_SPEED = 1; // simulated seconds of history advanced per real second while playing — real-time; use rewind/fast-forward (tap/hold) to cover ground faster
+let lastReplayTickMs = null;
+setInterval(() => {
+  if (!replayMode || !replayPlaying) { lastReplayTickMs = null; return; }
+  const nowMs = Date.now();
+  if (lastReplayTickMs === null) { lastReplayTickMs = nowMs; return; }
+  const dt = (nowMs - lastReplayTickMs) / 1000;
+  lastReplayTickMs = nowMs;
+  replayTs = Math.min(replayBounds.max, replayTs + dt * REPLAY_PLAY_SPEED);
+  document.getElementById('replay-slider').value = Math.floor(replayTs);
+  if (replayTs >= replayBounds.max) setReplayPlaying(false);
+  scheduleReplayFetch();
+}, 500);
+
+if (LIVE) {
+  document.getElementById('replay-toggle-btn').style.display = '';
+  document.getElementById('replay-hours-label').textContent =
+    LIVE.replayHours >= 1 ? Math.round(LIVE.replayHours) : LIVE.replayHours.toFixed(1);
 }
 
 // ── EDIT MODAL (name/color) ───────────────────────────────────────────────
@@ -3623,6 +5200,12 @@ if (LIVE) {
 // the standalone downloaded file, so its edit buttons are never created
 // there (see createListItem) and this code simply has nothing to wire up.
 let editingIdx = null;
+// Set alongside editingIdx when the modal was opened for a multi-selection
+// (see openEditModal) — an array of every selected index, or null for a
+// plain single-item edit. Name editing is unavailable in bulk mode (the
+// selection's names differ), but color and delete both apply to every
+// target, same as the old "RECOLOR SELECTED"/"DELETE SELECTED" buttons did.
+let editingBulk = null;
 
 function hexToRgb(hex) {
   const c = hex.replace('#', '');
@@ -3777,9 +5360,41 @@ document.getElementById('color-modal-backdrop').addEventListener('click', (e) =>
 });
 
 function openEditModal(i) {
+  // A row visible while scrubbing replay can be a reconstructed past state
+  // — e.g. a vault point that's since been deleted (see get_vault_points_
+  // as_of) — not a live editable entry. edit_point/edit_signal_color have
+  // no notion of "as of ts", so saving here would silently edit whatever
+  // CURRENTLY has this name/signal_id, not the replayed ghost on screen.
+  if (replayMode) {
+    showToast("Can't edit while viewing replay — exit replay first.", true);
+    return;
+  }
+
+  // A row that's part of an active multi-selection opens the modal in bulk
+  // mode instead of editing just itself — this is what replaced the old
+  // separate "RECOLOR SELECTED"/"DELETE SELECTED" bulk-bar buttons.
+  const bulk = selectedIndices.size > 1 && selectedIndices.has(i);
   editingIdx = i;
+  // Ore/asteroid rows can end up in a range/shift-click selection (they're
+  // real pointData entries once revealed by search — see oreEntries/
+  // asteroidEntries) but aren't editable/deletable vault entries — drop
+  // them from the bulk target list rather than sending a doomed request
+  // for each and reporting it as a success.
+  editingBulk = bulk ? [...selectedIndices].filter(idx => !pointData[idx].isOre && !pointData[idx].isAsteroid) : null;
+
   const p = pointData[i];
+  const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
+  // No name field for a signal (nothing editable there) or for a bulk edit
+  // (the selection's names differ) — hide it entirely rather than showing
+  // a control that does nothing or would blindly rename everything alike.
+  document.getElementById('edit-modal-title').textContent = bulk
+    ? `EDIT ${editingBulk.length} SELECTED`
+    : (isSignal ? 'EDIT SIGNAL' : 'EDIT GPS POINT');
+  document.getElementById('edit-name-row').style.display = (bulk || isSignal) ? 'none' : '';
   document.getElementById('edit-name-input').value = p.name;
+  // Color starts from whichever row's own ✎ was clicked — a reasonable
+  // starting point for a bulk recolor, same as the old bulk button did by
+  // seeding from the first selected item's color.
   const { r, g, b } = hexToRgb(p.color);
   const { h, s, v } = rgbToHsv(r, g, b);
   document.getElementById('edit-color-h').value = Math.round(h);
@@ -3788,21 +5403,108 @@ function openEditModal(i) {
   updateColorPreview();
   document.getElementById('edit-modal-error').style.display = 'none';
   document.getElementById('edit-modal-backdrop').classList.add('open');
-  document.getElementById('edit-name-input').focus();
+  if (!bulk && !isSignal) document.getElementById('edit-name-input').focus();
 }
 
 function closeEditModal() {
   editingIdx = null;
+  editingBulk = null;
   document.getElementById('edit-modal-backdrop').classList.remove('open');
+}
+
+// Bulk recolor: vault points and live player markers both go through
+// /map/edit_point with the name unchanged (recolor-only); signals have
+// their own /map/edit_signal_color (no name at all). Requests run in
+// parallel — this is a UI convenience over N single-item edits, not a new
+// server-side bulk endpoint. Fires everything and reports a summary via
+// toast rather than the modal's inline error, then closes regardless of
+// partial failures — same as the old bulk-recolor button's UX.
+async function saveEditBulk(targets, newColor) {
+  const results = await Promise.all(targets.map(async (idx) => {
+    const p = pointData[idx];
+    const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
+    if (isSignal && !p.signal_id) return false;
+    try {
+      const response = await fetch(isSignal ? '/map/edit_signal_color' : '/map/edit_point', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isSignal
+          ? { guild_id: LIVE.guildId, channel_id: LIVE.channelId, signal_id: p.signal_id, color: newColor }
+          : { guild_id: LIVE.guildId, channel_id: LIVE.channelId, old_name: p.name, new_name: p.name, color: newColor }),
+      });
+      if (!response.ok) return false;
+      p.color = newColor;
+      applyPointColorVisuals(idx);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }));
+
+  const failed = results.filter(ok => !ok).length;
+  showToast(failed
+    ? `Recolored ${results.length - failed}/${results.length} — ${failed} failed.`
+    : `Recolored ${results.length} point(s).`, !!failed);
+  closeEditModal();
 }
 
 async function saveEdit() {
   if (editingIdx === null) return;
+  const newColor = updateColorPreview();
+
+  if (editingBulk) {
+    await saveEditBulk(editingBulk, newColor);
+    return;
+  }
+
   const idx = editingIdx;
   const p = pointData[idx];
-  const newName = document.getElementById('edit-name-input').value.trim();
-  const newColor = updateColorPreview();
+  const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
   const errorEl = document.getElementById('edit-modal-error');
+
+  if (isSignal) {
+    if (!p.signal_id) { closeEditModal(); return; }
+
+    let response;
+    try {
+      response = await fetch('/map/edit_signal_color', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guild_id: LIVE.guildId,
+          channel_id: LIVE.channelId,
+          signal_id: p.signal_id,
+          color: newColor,
+        }),
+      });
+    } catch (e) {
+      errorEl.textContent = 'Network error — try again.';
+      errorEl.style.display = '';
+      return;
+    }
+
+    if (!response.ok) {
+      let message = 'Save failed.';
+      try { message = (await response.json()).error || message; } catch (e) {}
+      // The server prunes stale signals on every /map/live poll — this one
+      // may have already aged out from under the open modal.
+      if (response.status === 400 && /not found/i.test(message)) {
+        hidePointLocally(idx);
+        closeEditModal();
+        return;
+      }
+      errorEl.textContent = message;
+      errorEl.style.display = '';
+      return;
+    }
+
+    p.color = newColor;
+    applyPointColorVisuals(idx);
+    closeEditModal();
+    return;
+  }
+
+  const newName = document.getElementById('edit-name-input').value.trim();
 
   if (!newName) {
     errorEl.textContent = 'Name cannot be empty.';
@@ -3862,8 +5564,8 @@ async function saveEdit() {
 }
 
 // Pushes pointData[idx].color onto its mesh/glow/sidebar-dot — shared by
-// saveEdit (vault point rename+recolor) and the color-only editors below
-// (signals, live players, bulk recolor).
+// saveEdit (vault points and signals, via the unified edit modal) and the
+// color-only editors below (live players, bulk recolor).
 function applyPointColorVisuals(idx) {
   const p = pointData[idx];
   meshes[idx].material.color.set(p.color).multiplyScalar(POINT_MESH_DIM);
@@ -3880,6 +5582,11 @@ function applyPointColorVisuals(idx) {
 // sync_api.py's edit_point). Sets color_override server-side so the next
 // position sync (or the "player" admin category color) doesn't clobber it.
 async function editPlayerColor(idx) {
+  // Same "not a live entry" concern as openEditModal's replayMode guard.
+  if (replayMode) {
+    showToast("Can't edit while viewing replay — exit replay first.", true);
+    return;
+  }
   const p = pointData[idx];
   const picked = await pickColor(p.color, `Recolor ${p.name}`);
   if (!picked) return;
@@ -3913,49 +5620,6 @@ async function editPlayerColor(idx) {
   applyPointColorVisuals(idx);
 }
 
-// Color-only editor for a hostile signal (⚠) — signals have no editable
-// name, so this is the only edit action they get. Sets color_override
-// server-side so the category's admin-set color no longer wins for this
-// one signal (see VectorHandler.py's get_hostile_signals).
-async function editSignalColor(idx) {
-  const p = pointData[idx];
-  if (!p.signal_id) return;
-  const picked = await pickColor(p.color, `Recolor ${p.name}`);
-  if (!picked) return;
-
-  let response;
-  try {
-    response = await fetch('/map/edit_signal_color', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        guild_id: LIVE.guildId,
-        channel_id: LIVE.channelId,
-        signal_id: p.signal_id,
-        color: picked,
-      }),
-    });
-  } catch (e) {
-    showToast('Network error — try again.', true);
-    return;
-  }
-
-  if (!response.ok) {
-    let message = 'Recolor failed.';
-    try { message = (await response.json()).error || message; } catch (e) {}
-    if (response.status === 400 && /not found/i.test(message)) {
-      showToast(`"${p.name}" was already cleared.`, false);
-      hidePointLocally(idx);
-      return;
-    }
-    showToast(message, true);
-    return;
-  }
-
-  p.color = picked;
-  applyPointColorVisuals(idx);
-}
-
 // Same "hide in place, never shift indices" treatment applyLiveUpdate gives
 // a point removed server-side — instant feedback after a manual delete
 // rather than waiting up to pollMs for the next /map/live poll to notice.
@@ -3975,24 +5639,78 @@ function hidePointLocally(idx) {
   updateVisibility();
 }
 
+// Bulk delete: live player markers have no delete concept (they just expire
+// naturally) — silently excluded from the selection rather than erroring.
+// Same fire-all/toast-summary/always-close UX as saveEditBulk above.
+async function deleteEditingPointBulk(targets) {
+  const deletable = targets.filter(idx => !pointData[idx].name.startsWith(PLAYER_MARKER_PREFIX));
+  if (!deletable.length) {
+    showToast("Nothing deletable in the selection — live player markers can't be deleted.", true);
+    closeEditModal();
+    return;
+  }
+
+  if (!await confirmDialog(`Delete ${deletable.length} selected point(s)? This cannot be undone.`, 'DELETE SELECTED')) return;
+
+  const results = await Promise.all(deletable.map(async (idx) => {
+    const p = pointData[idx];
+    const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
+    try {
+      const response = await fetch(isSignal ? '/map/delete_signal' : '/map/delete_point', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isSignal
+          ? { guild_id: LIVE.guildId, channel_id: LIVE.channelId, signal_id: p.signal_id }
+          : { guild_id: LIVE.guildId, channel_id: LIVE.channelId, name: p.name }),
+      });
+      // A 400 here is realistically "not found" (already gone — see the
+      // single-item dismiss/delete flow's same "not found" -> already
+      // cleared handling) since routing/name are correct by construction.
+      if (response.ok || response.status === 400) {
+        hidePointLocally(idx);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }));
+
+  const failed = results.filter(ok => !ok).length;
+  showToast(failed
+    ? `Deleted ${results.length - failed}/${results.length} — ${failed} failed.`
+    : `Deleted ${results.length} point(s).`, !!failed);
+  closeEditModal();
+}
+
 async function deleteEditingPoint() {
   if (editingIdx === null) return;
+
+  if (editingBulk) {
+    await deleteEditingPointBulk(editingBulk);
+    return;
+  }
+
   const idx = editingIdx;
   const p = pointData[idx];
+  const isSignal = p.name.startsWith(HOSTILE_MARKER_PREFIX);
   const errorEl = document.getElementById('edit-modal-error');
 
-  if (!await confirmDialog(`Delete "${p.name}"? This removes it from the vault permanently.`, 'DELETE POINT')) return;
+  if (isSignal && !p.signal_id) { closeEditModal(); return; }
+
+  const confirmText = isSignal
+    ? `Dismiss "${p.name}"? It reappears if still being detected in-game.`
+    : `Delete "${p.name}"? This removes it from the vault permanently.`;
+  if (!await confirmDialog(confirmText, isSignal ? 'DISMISS SIGNAL' : 'DELETE POINT')) return;
 
   let response;
   try {
-    response = await fetch('/map/delete_point', {
+    response = await fetch(isSignal ? '/map/delete_signal' : '/map/delete_point', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        guild_id: LIVE.guildId,
-        channel_id: LIVE.channelId,
-        name: p.name,
-      }),
+      body: JSON.stringify(isSignal
+        ? { guild_id: LIVE.guildId, channel_id: LIVE.channelId, signal_id: p.signal_id }
+        : { guild_id: LIVE.guildId, channel_id: LIVE.channelId, name: p.name }),
     });
   } catch (e) {
     errorEl.textContent = 'Network error — try again.';
@@ -4001,8 +5719,18 @@ async function deleteEditingPoint() {
   }
 
   if (!response.ok) {
-    let message = 'Delete failed.';
+    let message = isSignal ? 'Dismiss failed.' : 'Delete failed.';
     try { message = (await response.json()).error || message; } catch (e) {}
+    // The server prunes stale signals (e.g. "unidentified" after just 5
+    // minutes) on every /map/live poll — a marker the client is still
+    // showing can lose that race and already be gone by the time this
+    // click lands. Either way the point should disappear locally; treat
+    // "not found" as already-handled instead of an error.
+    if (isSignal && response.status === 400 && /not found/i.test(message)) {
+      hidePointLocally(idx);
+      closeEditModal();
+      return;
+    }
     errorEl.textContent = message;
     errorEl.style.display = '';
     return;
@@ -4010,48 +5738,6 @@ async function deleteEditingPoint() {
 
   hidePointLocally(idx);
   closeEditModal();
-}
-
-async function dismissSignal(idx) {
-  const p = pointData[idx];
-  if (!p.signal_id) return;
-
-  if (!await confirmDialog(`Dismiss "${p.name}"? It reappears if still being detected in-game.`, 'DISMISS SIGNAL')) return;
-
-  let response;
-  try {
-    response = await fetch('/map/delete_signal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        guild_id: LIVE.guildId,
-        channel_id: LIVE.channelId,
-        signal_id: p.signal_id,
-      }),
-    });
-  } catch (e) {
-    showToast('Network error — try again.', true);
-    return;
-  }
-
-  if (!response.ok) {
-    let message = 'Dismiss failed.';
-    try { message = (await response.json()).error || message; } catch (e) {}
-    // The server prunes stale signals (e.g. "unidentified" after just 5
-    // minutes) on every /map/live poll — a marker the client is still
-    // showing can lose that race and already be gone by the time this
-    // click lands. Either way the point should disappear locally; treat
-    // "not found" as already-handled instead of an error.
-    if (response.status === 400 && /not found/i.test(message)) {
-      showToast(`"${p.name}" was already cleared.`, false);
-      hidePointLocally(idx);
-      return;
-    }
-    showToast(message, true);
-    return;
-  }
-
-  hidePointLocally(idx);
 }
 
 document.getElementById('edit-cancel-btn').addEventListener('click', closeEditModal);
@@ -4080,6 +5766,7 @@ let lastCoordTextUpdateMs = 0;
 const COORD_TEXT_UPDATE_INTERVAL_MS = 150;
 
 function updateLiveDeadReckoning() {
+  if (replayMode) return; // paused on a past frame — extrapolating would fly markers off it, see REPLAY above
   const nowMs = Date.now();
   const updateText = nowMs - lastCoordTextUpdateMs >= COORD_TEXT_UPDATE_INTERVAL_MS;
   if (updateText) lastCoordTextUpdateMs = nowMs;
@@ -4122,6 +5809,12 @@ const DASH_ANIM_SPEED = 0.02; // fraction of that line's own dashSize per frame
 (function loop() {
   requestAnimationFrame(loop);
   controls.update();
+
+  // Headlamp-style: shines from the camera toward whatever it's looking at,
+  // so an asteroid's shaded relief (see asteroidShapeLight above) stays
+  // visible regardless of orbit angle.
+  asteroidShapeLight.position.copy(camera.position);
+  asteroidShapeLight.target.position.copy(controls.target);
   frame++;
 
   // Adaptive near/far: a fixed 0.1/1e12 pair (10^13 depth range) is needed
@@ -4139,7 +5832,18 @@ const DASH_ANIM_SPEED = 0.02; // fraction of that line's own dashSize per frame
   // where it would force a huge far plane regardless of actual zoom level
   // and wreck the depth precision this adaptive near/far exists to protect.
   const orbitDist = controls.getDistance();
-  const nextNear = Math.max(0.05, orbitDist * 0.001);
+  // Near plane: normally scaled to the orbit distance, but pulled in to
+  // half the distance to the nearest real surface (drawn terrain, or an
+  // asteroid) so geometry right next to the camera - e.g. ground under a
+  // camera that's orbiting a far-away target - is never clipped away. Safe to
+  // go this small because the depth buffer is logarithmic (see the renderer).
+  camera.getWorldPosition(_camPos);
+  let nearestSurface = terrainNearestSurface;
+  for (const asteroid of ASTEROIDS) {
+    const d = _camPos.distanceTo(asteroid.worldPos) - asteroid.radius;
+    if (d < nearestSurface) nearestSurface = d;
+  }
+  const nextNear = Math.max(0.02, Math.min(orbitDist * 0.001, Math.max(nearestSurface, 0) * 0.5));
   // Planets sit at a fixed world position regardless of what you're zoomed
   // into, so orbitDist alone isn't a safe far-plane floor — zooming in tight
   // on a nearby GPS point while a planet sits thousands of km away would
@@ -4151,12 +5855,18 @@ const DASH_ANIM_SPEED = 0.02; // fraction of that line's own dashSize per frame
     const d = _camPos.distanceTo(planet.worldPos) + planet.radius * 1.2;
     if (d > farFloor) farFloor = d;
   }
+  for (const asteroid of ASTEROIDS) {
+    const d = _camPos.distanceTo(asteroid.worldPos) + asteroid.radius * 1.2;
+    if (d > farFloor) farFloor = d;
+  }
   const nextFar = Math.max(nextNear * 1000, farFloor);
   if (Math.abs(camera.near - nextNear) > camera.near * 0.01 || Math.abs(camera.far - nextFar) > camera.far * 0.01) {
     camera.near = nextNear;
     camera.far = nextFar;
     camera.updateProjectionMatrix();
   }
+
+  updatePlanetTerrain();
 
   updateLiveDeadReckoning();
 
@@ -4199,9 +5909,8 @@ const DASH_ANIM_SPEED = 0.02; // fraction of that line's own dashSize per frame
     glows[activeIdx].scale.setScalar(BASE_POINT_SIZE * s * (7 + t * 3));
   }
 
-  // Rebuild distance rings each frame so they stay perpendicular to camera
+  // Rebuild the pulse wave each frame so it stays perpendicular to camera
   if (activeIdx !== null) {
-    updateDistanceRings();
     updatePulseWave();
   } else {
     if (pulseRing) { scene.remove(pulseRing); pulseRing = null; }

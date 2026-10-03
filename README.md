@@ -1,6 +1,6 @@
 # Space Engineers GPS Manager
 
-A locally-hosted Discord bot for managing Space Engineers GPS coordinates within a faction. GPS points are stored per-channel in a local SQLite database and can be searched, filtered, visualised on an interactive 3D map, and bulk-removed. An optional Space Engineers client plugin (see [`plugin/`](plugin/)) can auto-sync your in-game GPS list and live position straight into the vault.
+A locally-hosted Discord bot for managing Space Engineers GPS coordinates within a faction. GPS points are stored per-channel in a local SQLite database and can be searched, filtered, visualised on an interactive 3D map, and bulk-removed. An optional Space Engineers client plugin (see [`EventHorizon_Plugin/`](EventHorizon_Plugin/) / [`Pulsar_Plugin/`](Pulsar_Plugin/)) can auto-sync your in-game GPS list and live position straight into the vault.
 
 ---
 
@@ -11,17 +11,17 @@ A locally-hosted Discord bot for managing Space Engineers GPS coordinates within
 - `aiohttp >= 3.8.0` (also powers the optional plugin sync API)
 - A Discord bot token, in `bot_config.json`'s `discord_token`
 
-Run `setup.py` to create the virtual environment and install dependencies.
+Run `setup.py` to create the virtual environment and install dependencies (and, on Linux, optionally install the bot as a systemd service).
 
 ---
 
 ## Setup
 
 1. Create a Discord bot and put its token, and everything else below, in `bot_config.json` (auto-created with null placeholders on first run — see [`bot_config.py`](bot_config.py); one file for the bot token, sync API host/port, and Discord OAuth credentials, all git-ignored since it holds secrets).
-2. Run `python setup.py` to initialise the virtual environment.
+2. Run `python3 setup.py` (as your normal user, not with sudo). It creates `.venv/`, installs `requirements.txt` into it, creates `bot_config.json` if missing and tells you what's still unset. On Linux it also offers to install a systemd service (`gps-vault`) that starts the bot at boot and restarts it on failure — pass `--service` / `--no-service` to skip the prompt, `--mode bot|web` to change what the service runs, or `--uninstall-service` to remove it. Re-running is safe and picks up config changes.
 3. (Optional, for the plugin) In `bot_config.json`, set `port` for the sync API, and `public_host` to the address other machines (like your gaming PC) can reach this bot at, so `/create_sync_token` prints a usable endpoint. Forward/open that port on the machine running the bot.
    - By default this serves plain HTTP — fine for same-machine/LAN testing, but the plugin's sync token and your GPS data travel unencrypted. To enable HTTPS, set `cert_file`/`key_file` to a PEM cert+key pair (run `scripts/gen_dev_cert.sh` for a self-signed one to test with; swap in a real cert once you have a domain). To migrate an already-deployed bot without breaking existing plugin installs, also set `https_port` to a different port than `port` — the server then serves plain HTTP on `port` (for old installs) *and* HTTPS on `https_port` at the same time, until everyone's moved over.
-4. Start the bot: `python VectorHandler.py`.
+4. Start the bot: `.venv/bin/python VectorHandler.py` (`.venv\Scripts\python.exe` on Windows) — or, if you installed the service, `sudo systemctl start gps-vault` (logs: `journalctl -u gps-vault -f`).
 5. In your target Discord channel, run `/bind` (requires Administrator) to lock the bot to that channel.
 
 ---
@@ -90,7 +90,7 @@ Removes a contiguous range of GPS points by their 1-based index.
 ---
 
 ### `/create_sync_token`
-Creates a token for the [Space Engineers plugin](plugin/) to auto-sync GPS points and live position into the current (bound) channel. The token and sync endpoint are shown once, ephemerally — paste them into the plugin's `config.json`.
+Creates a token for the Space Engineers plugin (see [Space Engineers Plugin](#space-engineers-plugin-auto-sync) below) to auto-sync GPS points and live position into the current (bound) channel. The token and sync endpoint are shown once, ephemerally — paste them into the plugin's settings dialog in Pulsar.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -120,14 +120,19 @@ Lists active sync tokens for the current channel (label and creation date only �
 
 ## Space Engineers Plugin (auto-sync)
 
-The [`plugin/`](plugin/) folder is a standalone client plugin loaded by [Pulsar](https://github.com/SpaceGT/Pulsar) — Pulsar itself is not bundled here, it's a prerequisite you install separately. Once loaded, it periodically reads your in-game GPS list and character position via the official Space Engineers Mod API and pushes them to the bot's sync API, so they show up via `/search_gps` and `/map` without manual copy-pasting. Live position is synced as a single point per player (named `◆ PlayerName`) that updates in place rather than accumulating history.
+There are two variants of the client plugin, both loaded by [Pulsar](https://github.com/SpaceGT/Pulsar) — Pulsar itself is not bundled here, it's a prerequisite you install separately. Once loaded, either one periodically reads your in-game GPS list and character position via the official Space Engineers Mod API and pushes them to the bot's sync API, so they show up via `/search_gps` and `/map` without manual copy-pasting. Live position is synced as a single point per player (named `◆ PlayerName`) that updates in place rather than accumulating history.
 
-**Setup:**
+- **[`EventHorizon_Plugin/`](EventHorizon_Plugin/)** — in-game name **GPS Vault - Mindrazer**. The base plugin described below.
+- **[`Pulsar_Plugin/`](Pulsar_Plugin/)** — in-game name **GPS Vault - Datalink**. Same base plugin, plus two differences:
+  - After an hour with no keyboard/mouse/joystick input, it prints "Player AFK Vault-Sync Deactivated!" to chat and pauses every sync path (GPS, position, planets, hostile signals) until input resumes.
+  - Neutral/enemy contacts are reported at a randomized point within an uncertainty radius of their true position instead of their exact location — 10m at 1km, 1km at 10km, 10km at 100km, 100km at 1000km — rather than the exact spot. The offset is re-rolled once per contact (not every push), and only the max radius is reported, never the actual offset, so a repeated read can't be averaged/triangulated back to the truth. Allied/owned/unidentified contacts, and your own GPS/position, are unaffected.
+
+**Setup** (pick one plugin folder and its manifest below — steps are identical either way):
 1. On the bot side, `/bind` a channel and run `/create_sync_token` to get an endpoint + token.
-2. In Pulsar, add this plugin as a source using the raw URL to [`plugin/GpsSyncPlugin.xml`](plugin/GpsSyncPlugin.xml) — Pulsar reads that manifest to pull the source from this repo (via `RepoId`/`Commit`), build it (pointing `GameBinPath` at your Space Engineers `Bin64` folder — see [`plugin/GpsSyncPlugin.csproj`](plugin/GpsSyncPlugin.csproj)), and list it in-game. Alternatively, build the `.csproj` yourself and load the resulting DLL via Pulsar's local/manual plugin option.
-3. In Pulsar's plugin list, select **GPS Vault - DataLink** and click **Configure** to open its settings dialog; pick or add a sync profile and set its `Endpoint`/`Token`/`Channel ID` to the values from step 1 (endpoint/token/channel changes apply immediately, but turn sync off for the current world until you re-enable it; interval changes need a restart). You can save several profiles (e.g. one per Discord server) and switch between them from the dropdown — use "Look Up Server/Channel Names" to label a profile with its real Discord names instead of raw IDs. Sync is off by default in every new world/server; enabling it sticks to that world+profile combination across restarts.
+2. In Pulsar, add the plugin as a source using the raw URL to its manifest — [`Plugins/GpsSyncPlugin.xml`](Plugins/GpsSyncPlugin.xml) for EventHorizon (Mindrazer), or [`Plugins/GpsSyncPluginPulsar.xml`](Plugins/GpsSyncPluginPulsar.xml) for the Pulsar variant (Datalink). Pulsar reads that manifest to pull the source from this repo (via `RepoId`/`Commit`/`SourceDirectories`), build it (pointing `GameBinPath` at your Space Engineers `Bin64` folder — see the plugin folder's `GpsSyncPlugin.csproj`), and list it in-game. Alternatively, build the `.csproj` yourself and load the resulting DLL via Pulsar's local/manual plugin option.
+3. In Pulsar's plugin list, select the plugin you added and click **Configure** to open its settings dialog; pick or add a sync profile and set its `Endpoint`/`Token`/`Channel ID` to the values from step 1 (endpoint/token/channel changes apply immediately, but turn sync off for the current world until you re-enable it; interval changes need a restart). You can save several profiles (e.g. one per Discord server) and switch between them from the dropdown — use "Look Up Server/Channel Names" to label a profile with its real Discord names instead of raw IDs. Sync is off by default in every new world/server; enabling it sticks to that world+profile combination across restarts.
 
-> `plugin/GpsSyncPlugin.xml` pins a specific commit (`Commit`) — after pushing changes to `plugin/`, update that field to the new commit hash so Pulsar picks up the change.
+> Each manifest (`Plugins/GpsSyncPlugin.xml`, `Plugins/GpsSyncPluginPulsar.xml`, and each plugin folder's own copy) pins a specific commit (`Commit`) — after pushing changes to that plugin's folder, update its `Commit` field(s) to the new commit hash so Pulsar picks up the change. The two plugins share this one repo, so `SourceDirectories` in each manifest is what keeps Pulsar building only that plugin's own folder.
 
 **Sync directions:**
 - **Game → Discord**: your in-game GPS list and live position (with velocity) push up periodically, and *replace* the vault's copy of your GPS list — so deleting a GPS point in-game deletes it from the vault too. (With more than one player actively syncing the same channel, each push is treated as that player's full authoritative list — a point one player still has locally can briefly reappear if their next push lands right after another player deletes it. Fine for one active syncer per channel.) Live position syncs as a single point per player (named `◆ PlayerName`) that updates in place, plus a rolling 6-hour position history used for the web map's movement trail.
@@ -168,20 +173,23 @@ web_auth.py              # Discord OAuth2 login + signed session cookies for the
 bot_config.py             # Loads bot_config.json (see below); shared by all three files above
 bot_config.json           # Bot token, sync API host/port, Discord OAuth creds — one file, not committed
 session_secret.key        # Auto-generated cookie-signing key (not committed)
-plugin/                  # Space Engineers client plugin (loaded by Pulsar)
-plugin/GpsSyncPlugin.xml # Pulsar PluginData manifest (repo, source dir, pinned commit)
-plugin/Settings/         # In-game settings dialog (Pulsar's "Configure" button)
-plugin/ChatCommands.cs   # In-game /vault search, /vault confirm (and /vs, /vc) commands
+EventHorizon_Plugin/     # Space Engineers client plugin (loaded by Pulsar) — "GPS Vault - Mindrazer"
+Pulsar_Plugin/           # Same plugin, plus an AFK comms cutoff and fuzzed neutral/enemy contacts — "GPS Vault - Datalink"
+Plugins/                 # Root-level Pulsar PluginData manifests (repo, source dir, pinned commit) for both above
+EventHorizon_Plugin/GpsSyncPlugin.xml, Pulsar_Plugin/DatalinkPlugin.xml # Per-plugin copy of its own manifest
+*_Plugin/Settings/       # In-game settings dialog (Pulsar's "Configure" button)
+*_Plugin/ChatCommands.cs # In-game /vault search, /vault confirm (and /vs, /vc) commands
 templates/map.html      # Interactive 3D map template (Three.js) — shared by the live web map and the Discord /map command
-setup.py                # Environment setup script
-gps.db                  # SQLite database (auto-created on first run)
+local_server.py          # Standalone web server for the Datalink plugin's "Host Locally" option (built into an exe by .github/workflows)
+setup.py                # Installer: venv + dependencies + bot_config.json, optional Linux systemd service
+VaultDatabase.db          # SQLite database (auto-created on first run)
 ```
 
 ---
 
 ## Database
 
-SQLite (`gps.db`) with these tables:
+SQLite (`VaultDatabase.db`; an existing `gps.db` is renamed automatically on first start) with these tables:
 
 - **`gps_points`** — GPS coordinates scoped to guild + channel.
 - **`guild_bindings`** — Maps each guild to its bound channel(s).

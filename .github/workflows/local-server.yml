@@ -1,0 +1,53 @@
+# Builds GpsVaultLocalServer.exe (local_server.py + the web server, frozen
+# with PyInstaller) on every push to main that touches the server, and
+# republishes it to the rolling "local-server-latest" release. The Datalink
+# plugin's "Host Locally" toggle downloads it from there (see
+# Pulsar_Plugin/LocalServerHost.cs), re-downloading whenever the asset's id
+# changes — i.e. after each rebuild here.
+name: Local server exe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.py"
+      - "templates/**"
+      - "requirements.txt"
+      - ".github/workflows/local-server.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build exe
+        run: >
+          pyinstaller --onefile --console --name GpsVaultLocalServer
+          --add-data "templates;templates"
+          local_server.py
+
+      - name: Publish to rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release delete local-server-latest --yes --cleanup-tag || true
+          gh release create local-server-latest dist/GpsVaultLocalServer.exe \
+            --target "$GITHUB_SHA" \
+            --title "Local server (latest main)" \
+            --notes "GpsVaultLocalServer.exe built from $GITHUB_SHA — downloaded automatically by the Datalink plugin's Host Locally option." \
+            --prerelease

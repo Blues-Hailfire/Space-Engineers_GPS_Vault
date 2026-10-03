@@ -23,6 +23,13 @@ DEFAULTS = {
     "oauth_client_id": None,
     "oauth_client_secret": None,
     "oauth_redirect_uri": None,
+    "replay_hours": 24,
+    # Dev testing mode: off by default. When on, slash commands are synced
+    # to dev_guild_id only (instant in that one server) instead of globally
+    # (which Discord can take up to an hour to propagate) — see on_ready in
+    # VectorHandler.py.
+    "dev_mode": False,
+    "dev_guild_id": None,
 }
 
 

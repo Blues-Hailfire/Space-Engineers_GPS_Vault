@@ -1,4 +1,3 @@
-*.gitignore
 .idea/
 .claude/
 .agents/
@@ -6,8 +5,13 @@ bot_config.json
 *.db
 *.log
 gps.db
-plugin/bin/
-plugin/obj/
+VaultDatabase.db
+EventHorizon_Plugin/bin/
+EventHorizon_Plugin/obj/
+Pulsar_Plugin/bin/
+Pulsar_Plugin/obj/
 __pycache__/
 session_secret.key
 certs/
+dist/
+*.bak*
