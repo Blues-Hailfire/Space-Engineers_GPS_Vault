@@ -298,10 +298,8 @@ namespace GpsSyncPlugin
                 double? uncertaintyRadius = null;
                 if (category == "neutral" || category == "enemy")
                 {
-                    var distance = Vector3D.Distance(pos, playerPos);
-                    uncertaintyRadius = SignalUncertaintyRadius(distance);
-                    var fuzz = GetOrCreateSignalFuzz(signalId);
-                    pos += fuzz.Direction * (fuzz.Fraction * uncertaintyRadius.Value);
+                    pos = FuzzSignalPosition(signalId, pos, Vector3D.Distance(pos, playerPos), out var bucketRadius);
+                    uncertaintyRadius = bucketRadius;
                 }
 
                 // After the fuzz, so gravity (direction/strength reveals
@@ -342,13 +340,11 @@ namespace GpsSyncPlugin
                 if (s.category == "neutral" || s.category == "enemy")
                 {
                     var truePos = new Vector3D(s.x, s.y, s.z);
-                    var range = SignalUncertaintyRadius(Vector3D.Distance(truePos, playerPos));
-                    var fuzz = GetOrCreateSignalFuzz(s.signal_id);
-                    var fuzzed = truePos + fuzz.Direction * (fuzz.Fraction * range);
+                    var fuzzed = FuzzSignalPosition(s.signal_id, truePos, Vector3D.Distance(truePos, playerPos), out var bucketRadius);
                     s.x = fuzzed.X;
                     s.y = fuzzed.Y;
                     s.z = fuzzed.Z;
-                    s.radius = range;
+                    s.radius = bucketRadius;
                 }
                 result.Add(s);
             }
@@ -367,65 +363,83 @@ namespace GpsSyncPlugin
             // Drop fuzz state for signals no longer visible, so the cache
             // doesn't grow unbounded over a long session full of transient
             // contacts.
-            if (signalFuzzBySignalId.Count > 0)
+            if (signalFuzzByBucket.Count > 0)
             {
                 // The current weapon-lock target keeps its fuzz too even when it
                 // isn't a reported signal, or it'd be re-rolled every sync.
-                var stale = signalFuzzBySignalId.Keys.Where(id => !reportedSignalIds.Contains(id) && id != lockFuzzId).ToList();
-                foreach (var id in stale)
-                    signalFuzzBySignalId.Remove(id);
+                var stale = signalFuzzByBucket.Keys
+                    .Where(k => !reportedSignalIds.Contains(k.SignalId) && k.SignalId != lockFuzzId)
+                    .ToList();
+                foreach (var key in stale)
+                    signalFuzzByBucket.Remove(key);
             }
 
             return result;
         }
 
-        private struct SignalFuzz
-        {
-            public Vector3D Direction;
-            public double Fraction;
-        }
-
-        private static readonly Dictionary<long, SignalFuzz> signalFuzzBySignalId = new Dictionary<long, SignalFuzz>();
+        // Per (signal, radius bucket) offset, as a vector of length 0..1 to be
+        // scaled by that bucket's radius. See FuzzSignalPosition.
+        private static readonly Dictionary<(long SignalId, int Bucket), Vector3D> signalFuzzByBucket =
+            new Dictionary<(long SignalId, int Bucket), Vector3D>();
         private static readonly Random fuzzRandom = new Random();
         private static long lockFuzzId;
 
         /// <summary>
-        /// Reports a neutral/enemy signal's position + an uncertainty radius
-        /// instead of its exact location: a random point within that radius
-        /// of the truth, rather than the truth itself. The offset direction
-        /// and fraction-of-radius are cached per signal_id (not re-rolled
-        /// every tick, which fires every HostilesIntervalSeconds) so repeated
-        /// reports of the same contact don't average back out to its real
-        /// position — only the reported uncertaintyRadius (the max, never the
-        /// actual drawn offset) is exposed, so the true position can't be
-        /// triangulated from it either.
+        /// Reports a neutral/enemy signal at a random point within an
+        /// uncertainty radius of its true position, instead of the truth.
+        /// <paramref name="bucketRadius"/> is that radius, rounded up to a
+        /// power-of-two bucket (see SignalUncertaintyBucket) - the only radius
+        /// ever exposed.
+        ///
+        /// The offset is rolled once per (signal_id, bucket) and cached:
+        /// - Within a bucket, both the offset and the reported radius are
+        ///   constant, so repeated reports neither average out to the truth
+        ///   nor leak it through a changing radius (with an exact radius and a
+        ///   fixed offset fraction, two reports of a stationary contact at
+        ///   different distances would solve for its true position).
+        /// - Crossing into another bucket rolls an unrelated offset; coming
+        ///   back reuses the old bucket's one, so oscillating across a
+        ///   boundary can't farm fresh samples to average.
         /// </summary>
-        private static SignalFuzz GetOrCreateSignalFuzz(long signalId)
+        private static Vector3D FuzzSignalPosition(long signalId, Vector3D truePos, double distanceMeters, out double bucketRadius)
         {
-            if (signalFuzzBySignalId.TryGetValue(signalId, out var existing))
-                return existing;
+            var bucket = SignalUncertaintyBucket(distanceMeters);
+            bucketRadius = Math.Pow(2, bucket);
 
-            var theta = fuzzRandom.NextDouble() * Math.PI * 2;
-            var z = fuzzRandom.NextDouble() * 2 - 1;
-            var r = Math.Sqrt(Math.Max(0, 1 - z * z));
-            var fuzz = new SignalFuzz
+            var key = (signalId, bucket);
+            if (!signalFuzzByBucket.TryGetValue(key, out var offset))
             {
-                Direction = new Vector3D(r * Math.Cos(theta), r * Math.Sin(theta), z),
-                Fraction = fuzzRandom.NextDouble(),
-            };
-            signalFuzzBySignalId[signalId] = fuzz;
-            return fuzz;
+                // Uniform direction on the unit sphere, times a uniform
+                // fraction of the radius.
+                var theta = fuzzRandom.NextDouble() * Math.PI * 2;
+                var z = fuzzRandom.NextDouble() * 2 - 1;
+                var r = Math.Sqrt(Math.Max(0, 1 - z * z));
+                offset = new Vector3D(r * Math.Cos(theta), r * Math.Sin(theta), z) * fuzzRandom.NextDouble();
+                signalFuzzByBucket[key] = offset;
+            }
+
+            return truePos + offset * bucketRadius;
         }
 
         /// <summary>
-        /// Max offset (meters) a neutral/enemy signal's reported position may
-        /// be fuzzed by, scaling with true distance from the player: 10m at
-        /// 1km, 1km at 10km, 10km at 100km, 100km at 1000km (d^2/1e5 hits all
-        /// of the first two anchors exactly and coincides with d/10 exactly
-        /// at 10km, so it hands off to the linear rule with no discontinuity;
-        /// below 1km it keeps following the same quadratic, shrinking faster
-        /// than linear as distance drops, which isn't specified but is the
-        /// natural extension of the given anchors).
+        /// Uncertainty bucket for a contact at this true distance: the
+        /// exponent of the smallest power of two (meters, min 1m) at or above
+        /// SignalUncertaintyRadius, so a bucket's radius is never more than
+        /// 2x the unrounded one.
+        /// </summary>
+        private static int SignalUncertaintyBucket(double distanceMeters)
+        {
+            var radius = SignalUncertaintyRadius(distanceMeters);
+            return radius <= 1.0 ? 0 : (int)Math.Ceiling(Math.Log(radius, 2));
+        }
+
+        /// <summary>
+        /// Unrounded max offset (meters) for a neutral/enemy signal, scaling
+        /// with true distance from the player: 10m at 1km, 1km at 10km, 10km
+        /// at 100km, 100km at 1000km (d^2/1e5 hits the first two anchors
+        /// exactly and coincides with d/10 at 10km, so it hands off to the
+        /// linear rule with no discontinuity). Only ever reported rounded up
+        /// to its bucket - see SignalUncertaintyBucket.
         /// </summary>
         private static double SignalUncertaintyRadius(double distanceMeters)
         {
@@ -821,10 +835,8 @@ namespace GpsSyncPlugin
             if (relation == MyRelationsBetweenPlayerAndBlock.Neutral || relation == MyRelationsBetweenPlayerAndBlock.Enemies)
             {
                 var distance = Vector3D.Distance(targetPos, MyAPIGateway.Session.Player.Character.GetPosition());
-                var range = SignalUncertaintyRadius(distance);
                 lockFuzzId = grid?.EntityId ?? target.EntityId;
-                var fuzz = GetOrCreateSignalFuzz(lockFuzzId);
-                targetPos += fuzz.Direction * (fuzz.Fraction * range);
+                targetPos = FuzzSignalPosition(lockFuzzId, targetPos, distance, out _);
                 // The true distance would let repeated reports from a moving
                 // player triangulate the real position.
                 lockDistance = Vector3D.Distance(targetPos, MyAPIGateway.Session.Player.Character.GetPosition());

@@ -15,3 +15,4 @@ session_secret.key
 certs/
 dist/
 *.bak*
+gps.db-journal
