@@ -267,7 +267,8 @@ namespace GpsSyncPlugin
             set => SetField(ref positionIntervalSeconds, value);
         }
 
-        [Slider(1f, 60f, 1f, SliderAttribute.SliderType.Integer, description: "How often (seconds) to push detected hostile signals (antenna/sensor contacts currently visible on your HUD)")]
+        // Unused: signals are only pushed on demand via /vault capture now.
+        // Kept (without its [Slider]) so existing saved configs still load.
         public int HostilesIntervalSeconds
         {
             get => hostilesIntervalSeconds;

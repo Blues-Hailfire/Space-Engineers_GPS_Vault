@@ -43,6 +43,13 @@ namespace GpsSyncPlugin
     ///     active turns it off, removing all "[VP]" markers and stopping the
     ///     poll.
     ///
+    ///   /vault capture   (no aliases)
+    ///     One-shot: reads every signal (antenna/sensor contact) and ore
+    ///     deposit currently visible on the player's HUD and pushes them to
+    ///     the vault. This is the ONLY way signals and the player's own ore
+    ///     deposits are ever sent — nothing is pushed on a timer. Pulling
+    ///     other players' ore deposits down still happens automatically.
+    ///
     ///   /vault host "name"   (aliases: /vh, /VH)
     ///     Switches the active sync profile ("host profile") to the one whose
     ///     nickname matches (exact match preferred, otherwise a unique
@@ -71,6 +78,7 @@ namespace GpsSyncPlugin
         private static Timer vpTimer;
         private static volatile bool vpActive;
         private static volatile bool vpSyncing;
+        private static volatile bool captureInProgress;
 
         /// <summary>
         /// Attempts to subscribe to chat input, once. MyAPIGateway.Utilities is
@@ -131,6 +139,11 @@ namespace GpsSyncPlugin
                     else if (subCommand == "players")
                     {
                         HandlePlayers();
+                        sendToOthers = false;
+                    }
+                    else if (subCommand == "capture")
+                    {
+                        HandleCapture();
                         sendToOthers = false;
                     }
                     else if (subCommand == "host")
@@ -325,6 +338,67 @@ namespace GpsSyncPlugin
                 : "Syncing disabled — your GPS list and position will no longer push to or pull from the vault.");
         }
 
+        /// <summary>
+        /// One-shot push of every signal and ore deposit currently on the
+        /// HUD. The reads happen right here — chat input is raised on the
+        /// game thread, which both readers require — and only the network
+        /// sends move to a background task. Respects the per-world+profile
+        /// sync switch, same as every other push path.
+        /// </summary>
+        private static void HandleCapture()
+        {
+            if (!GameStateReader.IsSessionReady)
+                return;
+
+            if (!Config.Current.SyncEnabled)
+            {
+                ShowVaultMessage("Syncing is off for this world + host profile — turn it on with /vault sync on first.");
+                return;
+            }
+
+            if (captureInProgress)
+            {
+                ShowVaultMessage("A capture is already being sent — try again in a moment.");
+                return;
+            }
+
+            var signals = GameStateReader.ReadHostileSignals();
+            var ores = OreDeposits.ReadOreDeposits();
+
+            if (signals.Count == 0 && ores.Count == 0)
+            {
+                ShowVaultMessage("Nothing to capture — no signals or ore deposits on your HUD.");
+                return;
+            }
+
+            captureInProgress = true;
+            ShowVaultMessage($"Capturing {signals.Count} signal(s) and {ores.Count} ore deposit(s)...");
+
+            Task.Run(async () =>
+            {
+                string result;
+                try
+                {
+                    if (signals.Count > 0)
+                        await SyncClient.Shared.SyncHostilesAsync(new HostileSignalSyncRequest { signals = signals });
+                    if (ores.Count > 0)
+                        await SyncClient.Shared.SyncOresAsync(new OreDepositSyncRequest { deposits = ores });
+                    result = "Capture sent to the vault.";
+                }
+                catch (Exception e)
+                {
+                    Log.Instance?.Error($"/vault capture failed: {e.Message}");
+                    result = "Capture failed to send — see the plugin log.";
+                }
+                finally
+                {
+                    captureInProgress = false;
+                }
+
+                MyAPIGateway.Utilities?.InvokeOnGameThread(() => ShowVaultMessage(result));
+            });
+        }
+
         private static string StripQuotes(string text)
         {
             if (text.Length >= 2 && text[0] == '"' && text[text.Length - 1] == '"')
@@ -419,6 +493,9 @@ namespace GpsSyncPlugin
             text.AppendLine();
             text.AppendLine("/vault players  (/vp)");
             text.AppendLine("Toggles a live feed of other players sharing their location via the vault.");
+            text.AppendLine();
+            text.AppendLine("/vault capture");
+            text.AppendLine("Sends the signals and ore deposits currently on your HUD to the vault (one-shot).");
             text.AppendLine();
             text.AppendLine("/vault host \"name\"  (/vh)");
             text.AppendLine("Switches the active host profile by nickname.");

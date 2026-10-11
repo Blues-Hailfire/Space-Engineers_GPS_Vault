@@ -123,8 +123,9 @@ Lists active sync tokens for the current channel (label and creation date only �
 There are two variants of the client plugin, both loaded by [Pulsar](https://github.com/SpaceGT/Pulsar) — Pulsar itself is not bundled here, it's a prerequisite you install separately. Once loaded, either one periodically reads your in-game GPS list and character position via the official Space Engineers Mod API and pushes them to the bot's sync API, so they show up via `/search_gps` and `/map` without manual copy-pasting. Live position is synced as a single point per player (named `◆ PlayerName`) that updates in place rather than accumulating history.
 
 - **[`EventHorizon_Plugin/`](EventHorizon_Plugin/)** — in-game name **GPS Vault - Mindrazer**. The base plugin described below.
-- **[`Pulsar_Plugin/`](Pulsar_Plugin/)** — in-game name **GPS Vault - Datalink**. Same base plugin, plus two differences:
-  - After an hour with no keyboard/mouse/joystick input, it prints "Player AFK Vault-Sync Deactivated!" to chat and pauses every sync path (GPS, position, planets, hostile signals) until input resumes.
+- **[`Pulsar_Plugin/`](Pulsar_Plugin/)** — in-game name **GPS Vault - Datalink**. Same base plugin, plus three differences:
+  - After an hour with no keyboard/mouse/joystick input, it prints "Player AFK Vault-Sync Deactivated!" to chat and pauses every sync path (GPS, position, planets, ore pulls) until input resumes.
+  - Signals (antenna/sensor contacts) and your own ore-detector deposits are never pushed automatically — only when you run `/vault capture`, which sends whatever is on your HUD at that moment, once. Other players' ore deposits are still pulled down automatically.
   - Neutral/enemy contacts are reported at a randomized point within an uncertainty radius of their true position instead of their exact location — 10m at 1km, 1km at 10km, 10km at 100km, 100km at 1000km — rather than the exact spot. That radius is only ever reported rounded up to a power-of-two bucket (e.g. 16m at 1km, 1024m at 10km). The offset is rolled once per contact per bucket and reused while the contact stays in that bucket (or returns to it), and only the bucket radius is reported, never the actual offset, so repeated reads can't be averaged or solved back to the truth. Allied/owned/unidentified contacts, and your own GPS/position, are unaffected.
 
 **Setup** (pick one plugin folder and its manifest below — steps are identical either way):
@@ -144,6 +145,7 @@ There are two variants of the client plugin, both loaded by [Pulsar](https://git
     ```
   - `/vault confirm <number> [-h | -hide all]` (aliases `/vc`, `/VC`) — reveals that result on the HUD and hides the other points from that same search. Add `-h` (or `-hide all`) to also hide every other GPS point you have, not just that search's results.
   - `/vault sync [on|off]` — pauses or resumes syncing for the current world/server and active sync profile (same switch as the plugin's "Sync Enabled" setting); with no argument, toggles.
+  - `/vault capture` (Datalink/Pulsar plugin only) — sends the signals and ore deposits currently on your HUD to the vault, once.
   - `/vault host "name"` (aliases `/vh`, `/VH`) — switches the active sync profile ("host profile") to the one with that nickname; doesn't change that world's sync on/off state, since that's saved per world+profile.
   - `/vault list profiles` / `/vault list hosts` (aliases `/vlh`, `/VLH`) — lists your saved host profiles, marking the active one.
   - `/vault` / `/vault help` / `/vault -h` (aliases `/v`, `/V`) — pops up an in-game dialog listing every command above and what it does.

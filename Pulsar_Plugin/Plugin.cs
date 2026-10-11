@@ -41,7 +41,6 @@ namespace GpsSyncPlugin
         private Timer positionTimer;
         private Timer planetsTimer;
         private Timer oresTimer;
-        private Timer hostilesTimer;
         private Timer gpsPushDebounceTimer;
         private volatile bool gpsSyncing;
         private volatile bool positionSyncing;
@@ -50,7 +49,6 @@ namespace GpsSyncPlugin
         // Set by GameStateReader.AsteroidsChanged (a new voxel map appeared); consumed by Update().
         private volatile bool asteroidsPushPending;
         private volatile bool oresSyncing;
-        private volatile bool hostilesSyncing;
         private DateTime lastLocalGpsEditUtc = DateTime.MinValue;
 
         // Tracks what CheckForGpsPushTriggers last saw, to detect "just joined
@@ -80,12 +78,10 @@ namespace GpsSyncPlugin
             var gpsMs = Math.Max(1, config.GpsIntervalSeconds) * 1000;
             var positionMs = Math.Max(1, config.PositionIntervalSeconds) * 1000;
             var planetsMs = PlanetsIntervalSeconds * 1000;
-            var hostilesMs = Math.Max(1, config.HostilesIntervalSeconds) * 1000;
             gpsTimer = new Timer(OnGpsTick, null, gpsMs, gpsMs);
             positionTimer = new Timer(OnPositionTick, null, positionMs, positionMs);
             planetsTimer = new Timer(OnPlanetsTick, null, 5000, planetsMs); // first attempt shortly after load
             oresTimer = new Timer(OnOresTick, null, 10000, OresIntervalSeconds * 1000);
-            hostilesTimer = new Timer(OnHostilesTick, null, hostilesMs, hostilesMs);
             gpsPushDebounceTimer = new Timer(OnGpsPushDebounceElapsed, null, Timeout.Infinite, Timeout.Infinite);
             GameStateReader.LocalGpsChanged += OnLocalGpsChanged;
             GameStateReader.AsteroidsChanged += OnAsteroidsChanged;
@@ -402,10 +398,11 @@ namespace GpsSyncPlugin
         }
 
         /// <summary>
-        /// Pushes whatever the local ore detector currently shows, then pulls
-        /// every deposit anyone in the channel has found and adds the new ones
-        /// to the in-game GPS list (Show on HUD off — see
-        /// OreDeposits.ApplyRemoteOreDeposits).
+        /// Pull only: fetches every deposit anyone in the channel has found
+        /// and adds the new ones to the in-game GPS list (Show on HUD off —
+        /// see OreDeposits.ApplyRemoteOreDeposits). The local ore detector's
+        /// own deposits are never pushed automatically — only when the player
+        /// runs /vault capture (see ChatCommands.HandleCapture).
         /// </summary>
         private void OnOresTick(object state)
         {
@@ -417,10 +414,6 @@ namespace GpsSyncPlugin
             {
                 try
                 {
-                    var local = await GameThread.RunAsync(OreDeposits.ReadOreDeposits);
-                    if (local.Count > 0)
-                        await SyncClient.Shared.SyncOresAsync(new OreDepositSyncRequest { deposits = local });
-
                     var remote = await SyncClient.Shared.FetchOresAsync();
                     if (remote != null && remote.Count > 0)
                     {
@@ -446,41 +439,6 @@ namespace GpsSyncPlugin
             });
         }
 
-        private void OnHostilesTick(object state)
-        {
-            if (hostilesSyncing || !GameStateReader.IsSessionReady || !Config.Current.SyncEnabled || isAfk)
-                return;
-
-            hostilesSyncing = true;
-            Task.Run(async () =>
-            {
-                try
-                {
-                    List<HostileSignalDto> signals;
-                    try
-                    {
-                        signals = await GameThread.RunAsync(GameStateReader.ReadHostileSignals);
-                    }
-                    catch (TimeoutException)
-                    {
-                        Log.Instance?.Warn("Hostile signal sync tick: game thread hop timed out, skipping this cycle.");
-                        return;
-                    }
-
-                    if (signals.Count > 0)
-                        await SyncClient.Shared.SyncHostilesAsync(new HostileSignalSyncRequest { signals = signals });
-                }
-                catch (Exception e)
-                {
-                    Log.Instance?.Error($"Hostile signal sync tick failed: {e.Message}");
-                }
-                finally
-                {
-                    hostilesSyncing = false;
-                }
-            });
-        }
-
         public void Dispose()
         {
             GameStateReader.LocalGpsChanged -= OnLocalGpsChanged;
@@ -497,8 +455,6 @@ namespace GpsSyncPlugin
             planetsTimer = null;
             oresTimer?.Dispose();
             oresTimer = null;
-            hostilesTimer?.Dispose();
-            hostilesTimer = null;
             gpsPushDebounceTimer?.Dispose();
             gpsPushDebounceTimer = null;
             ChatCommands.Dispose();
