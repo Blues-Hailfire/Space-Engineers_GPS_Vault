@@ -158,11 +158,11 @@ def init_db():
                 (time.time(), sync_api.LIVE_POSITION_PREFIX + "%"),
             )
         # deleted_at: a "trash" for vault GPS points — delete_gps_point,
-        # remove_vectors_by_indices and upsert_and_prune_gps_points's prune
-        # step all set this instead of actually deleting the row, so a point
+        # remove_vectors_by_indices and upsert_and_trash_gps_points's
+        # deletions all set this instead of actually deleting the row, so a point
         # stays recoverable (and can't be silently re-added by another
         # player's stale local list still containing it — see
-        # upsert_and_prune_gps_points) until /empty_trash permanently erases
+        # upsert_and_trash_gps_points) until /empty_trash permanently erases
         # every trashed row in a channel. NULL = active; every read path
         # (load_vectors, find_duplicate_coords, ...) filters it out.
         if "deleted_at" not in existing:
@@ -726,21 +726,28 @@ def upsert_gps_point(guild_id, channel_id, vector):
             )
 
 
-def upsert_and_prune_gps_points(guild_id, channel_id, vectors):
-    """Upsert every given point, then trash (see delete_gps_point) any
-    non-live vault point in this channel that's missing from the list — so
-    deleting a GPS in-game trashes it here too, staying recoverable until
-    /empty_trash actually erases it. Live position markers (◆ prefix) are
+def upsert_and_trash_gps_points(guild_id, channel_id, vectors, deleted_names):
+    """Upsert every given point, then trash (see delete_gps_point) exactly
+    the vault points named in deleted_names — the ones this player had
+    synced and has since deleted in-game — staying recoverable until
+    /empty_trash actually erases them. Live position markers (◆ prefix) are
     never touched here; they're managed separately by
     record_position_history/upsert via /sync/position.
 
-    A trashed point is never resurrected by this: with more than one player
-    syncing the same channel, a point one player still has locally (because
-    they haven't pulled the deletion yet) is skipped rather than upserted, so
-    their stale push can't silently bring a deleted point back — it stays
-    trashed until /empty_trash erases it for good."""
+    Deliberately NOT "trash whatever's missing from vectors": with more than
+    one player syncing the same channel, a push from a player who hasn't
+    pulled lately (e.g. right after joining) would otherwise trash every
+    point the others added since — and since a trashed name is never
+    re-inserted (below), those points would be gone for good from everyone's
+    sync. deleted_names may be empty (an upsert-only push).
+
+    A trashed point is never resurrected by this: a point one player still
+    has locally (because they haven't pulled the deletion yet) is skipped
+    rather than upserted, so their stale push can't silently bring a deleted
+    point back — it stays trashed until /empty_trash erases it for good."""
     live_prefix_pattern = sync_api.LIVE_POSITION_PREFIX + "%"
     now = time.time()
+    deleted = 0
     with db() as conn:
         for v in vectors:
             cur = conn.execute(
@@ -762,24 +769,15 @@ def upsert_and_prune_gps_points(guild_id, channel_id, vectors):
                     (guild_id, channel_id, v.name, v.x, v.y, v.z, v.color),
                 )
 
-        names = [v.name for v in vectors]
-        if names:
-            placeholders = ",".join("?" * len(names))
+        # A name both pushed and listed as deleted is a client bug — keep it.
+        pushed = {v.name for v in vectors}
+        for name in set(deleted_names) - pushed:
             cur = conn.execute(
                 "UPDATE gps_points SET deleted_at = ? WHERE guild_id = ? AND channel_id = ? "
-                f"AND deleted_at IS NULL AND name NOT LIKE ? AND name NOT IN ({placeholders})",
-                (now, guild_id, channel_id, live_prefix_pattern, *names),
+                "AND name = ? AND deleted_at IS NULL AND name NOT LIKE ?",
+                (now, guild_id, channel_id, name, live_prefix_pattern),
             )
-        else:
-            # No vectors at all (player has zero GPS points locally) — an
-            # empty "NOT IN ()" is invalid SQL, and means "keep everything"
-            # rather than "keep nothing" anyway, so prune unconditionally.
-            cur = conn.execute(
-                "UPDATE gps_points SET deleted_at = ? WHERE guild_id = ? AND channel_id = ? "
-                "AND deleted_at IS NULL AND name NOT LIKE ?",
-                (now, guild_id, channel_id, live_prefix_pattern),
-            )
-        deleted = cur.rowcount
+            deleted += cur.rowcount
     return deleted
 
 
@@ -1999,7 +1997,7 @@ def delete_gps_point(guild_id, channel_id, name):
     """Trash a single vault GPS point by name (used by the web map's editor)
     — marks it deleted_at rather than actually removing the row, so it stays
     recoverable and can't be silently re-added by another player's stale
-    local list still containing it (see upsert_and_prune_gps_points) until
+    local list still containing it (see upsert_and_trash_gps_points) until
     /empty_trash permanently erases every trashed point in this channel.
     Returns True if a matching, not-already-trashed point was found."""
     with db() as conn:
@@ -2015,7 +2013,7 @@ def empty_trash(guild_id, channel_id):
     """Permanently erases every trashed GPS point in this channel. This is
     the only thing that actually deletes a row from gps_points once a point
     has been removed — delete_gps_point, remove_vectors_by_indices and
-    upsert_and_prune_gps_points's prune step all just mark deleted_at.
+    upsert_and_trash_gps_points's deletions all just mark deleted_at.
     Returns the number of points erased."""
     with db() as conn:
         cur = conn.execute(

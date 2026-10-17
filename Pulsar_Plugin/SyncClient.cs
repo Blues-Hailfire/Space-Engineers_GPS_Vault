@@ -44,24 +44,15 @@ namespace GpsSyncPlugin
                 requestMessage.Headers.Add("X-Channel-Id", trimmedChannelId);
         }
 
-        public async Task SyncGpsAsync(GpsSyncRequest request)
+        /// <summary>True if the server accepted the push.</summary>
+        public async Task<bool> SyncGpsAsync(GpsSyncRequest request)
         {
-            await PostAsync("/sync/gps", request);
+            return await PostAsync("/sync/gps", request);
         }
 
         public async Task SyncPositionAsync(PositionSyncRequest request)
         {
             await PostAsync("/sync/position", request);
-        }
-
-        public async Task SyncPlanetsAsync(PlanetSyncRequest request)
-        {
-            await PostAsync("/sync/planets", request);
-        }
-
-        public async Task SyncAsteroidsAsync(AsteroidSyncRequest request)
-        {
-            await PostAsync("/sync/asteroids", request);
         }
 
         public async Task SyncHostilesAsync(HostileSignalSyncRequest request)
@@ -223,15 +214,15 @@ namespace GpsSyncPlugin
             }
         }
 
-        private async Task PostAsync(string path, object body)
+        private async Task<bool> PostAsync(string path, object body)
         {
             try
             {
                 var endpoint = Config.Current.ActiveEndpoint.TrimEnd('/');
                 var json = JsonConvert.SerializeObject(body);
-                // Big payloads (asteroid meshes, planet heightmaps) are gzipped:
-                // they're mostly base64 and compress well, and a reverse proxy
-                // in front of the bot may cap the request body size.
+                // Big payloads (e.g. a long GPS list) are gzipped: JSON
+                // compresses well, and a reverse proxy in front of the bot
+                // may cap the request body size.
                 HttpContent content;
                 var raw = Encoding.UTF8.GetBytes(json);
                 if (raw.Length > 32 * 1024)
@@ -260,13 +251,16 @@ namespace GpsSyncPlugin
                         {
                             var text = await response.Content.ReadAsStringAsync();
                             Log.Instance?.Warn($"Sync POST {path} failed: {(int)response.StatusCode} {text}");
+                            return false;
                         }
+                        return true;
                     }
                 }
             }
             catch (Exception e)
             {
                 Log.Instance?.Warn($"Sync POST {path} error: {e.Message}");
+                return false;
             }
         }
     }

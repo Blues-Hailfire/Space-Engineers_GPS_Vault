@@ -14,6 +14,10 @@ namespace GpsSyncPlugin
     public class GpsSyncRequest
     {
         public List<GpsPointDto> points;
+        // Push only: vault names this player had synced and has since deleted
+        // in-game — the only points the server trashes (see
+        // GameStateReader.ReadDeletedVaultNames). Absent on a pull response.
+        public List<string> deleted;
     }
 
     public class PositionSyncRequest

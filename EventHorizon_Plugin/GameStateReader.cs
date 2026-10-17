@@ -517,8 +517,89 @@ namespace GpsSyncPlugin
         // from "the player just deleted this" — both look like "missing
         // locally" — and would keep resurrecting anything the player deletes,
         // since the vault still has it until the *next* push reports it gone.
-        // Session-lifetime only (not persisted): resets on plugin/game restart.
+        // Not persisted, and cleared whenever the world/profile/channel
+        // changes (ResetVaultTracking). Game thread only.
         private static readonly HashSet<string> knownVaultNames = new HashSet<string>();
+
+        // The subset of vault names actually observed in the local GPS list
+        // (found there by ApplyRemoteGpsList, or read from it for a push the
+        // server accepted) — the only names a push may report as deleted
+        // (ReadDeletedVaultNames). Kept apart from knownVaultNames because a
+        // point ApplyRemoteGpsList just AddGps'd may not be in the local list
+        // yet (in multiplayer it can take a server round-trip to appear);
+        // reporting those as "missing" would trash every point just pulled.
+        // Same lifetime as knownVaultNames. Game thread only.
+        private static readonly HashSet<string> deletableVaultNames = new HashSet<string>();
+
+        // Bumped by ResetVaultTracking, so a push still in flight from the
+        // previous world/channel can't record its names into the new one's
+        // knownVaultNames (see RecordGpsPush).
+        public static int VaultTrackingGeneration { get; private set; }
+
+        /// <summary>
+        /// Forgets every known vault name. Called when the world, host
+        /// profile or channel changes. Must run on the game thread.
+        /// </summary>
+        public static void ResetVaultTracking()
+        {
+            knownVaultNames.Clear();
+            deletableVaultNames.Clear();
+            VaultTrackingGeneration++;
+        }
+
+        /// <summary>
+        /// Vault points this player was seen to have (deletableVaultNames) that
+        /// are no longer anywhere in their local GPS list — i.e. ones they deleted
+        /// (or renamed) in-game. Checked against the full, unfiltered local
+        /// list, not ReadGpsList's: a vault point that's merely excluded from
+        /// pushes (a "[P]"/"[VP]"/ore name) is still there, not deleted. Must
+        /// run on the game thread.
+        /// </summary>
+        public static List<string> ReadDeletedVaultNames()
+        {
+            var result = new List<string>();
+            if (!IsSessionReady || deletableVaultNames.Count == 0)
+                return result;
+
+            var localList = new List<IMyGps>();
+            MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Session.Player.IdentityId, localList);
+            var localNames = new HashSet<string>(localList.Where(g => g.Name != null).Select(g => g.Name));
+
+            foreach (var name in deletableVaultNames)
+            {
+                if (!localNames.Contains(name))
+                    result.Add(name);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Records a push the server accepted: its points are now in the vault
+        /// (so deleting one later is a real deletion to report), and its
+        /// reported deletions are done — forgetting them means a point
+        /// re-added to the vault later (e.g. after /empty_trash) is pulled in as new
+        /// instead of being re-trashed by every later push. Ignored if
+        /// tracking was reset since the push was read. Must run on the game
+        /// thread.
+        /// </summary>
+        public static void RecordGpsPush(int trackingGeneration, List<GpsPointDto> pushed, List<string> deleted)
+        {
+            if (trackingGeneration != VaultTrackingGeneration)
+                return;
+
+            foreach (var p in pushed)
+            {
+                if (string.IsNullOrEmpty(p.name))
+                    continue;
+                knownVaultNames.Add(p.name);
+                deletableVaultNames.Add(p.name);
+            }
+            foreach (var name in deleted)
+            {
+                knownVaultNames.Remove(name);
+                deletableVaultNames.Remove(name);
+            }
+        }
 
         /// <summary>
         /// Merges the vault's GPS list (points added/edited in Discord, or by
@@ -527,8 +608,9 @@ namespace GpsSyncPlugin
         /// AddGps/ModifyGps calls, so they persist and show up for the player
         /// like any other GPS entry. A vault point the player deletes locally
         /// is recognized (via knownVaultNames) and left deleted rather than
-        /// re-added — the next GPS push then reports it missing, which is what
-        /// makes the bot delete it from the vault too.
+        /// re-added — the next GPS push then reports it deleted (see
+        /// ReadDeletedVaultNames), which is what makes the bot trash it in
+        /// the vault too.
         /// </summary>
         public static void ApplyRemoteGpsList(List<GpsPointDto> remotePoints)
         {
@@ -551,6 +633,7 @@ namespace GpsSyncPlugin
                 if (byName.TryGetValue(rp.name, out var existing))
                 {
                     knownVaultNames.Add(rp.name);
+                    deletableVaultNames.Add(rp.name);
                     bool coordsChanged = Vector3D.DistanceSquared(existing.Coords, coords) > 0.25;
                     bool colorChanged = existing.GPSColor.PackedValue != color.PackedValue;
                     if (coordsChanged || colorChanged)

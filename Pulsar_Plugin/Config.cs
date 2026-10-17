@@ -21,8 +21,6 @@ namespace GpsSyncPlugin
         private int gpsIntervalSeconds = 30;
         private int positionIntervalSeconds = 5;
         private int hostilesIntervalSeconds = 5;
-        private bool hostLocally;
-        private string localHostToken = "";
 
         // Legacy single-profile fields (pre-multi-profile config). Kept under
         // their original XML element names, with no UI attribute of their
@@ -291,70 +289,6 @@ namespace GpsSyncPlugin
             {
                 Log.Instance?.Warn($"Failed to open repo link: {e.Message}");
             }
-        }
-
-        /// <summary>
-        /// Raised (with the new value) when the player flips Host Locally in
-        /// the dialog — see Plugin, which starts/stops LocalServerHost in
-        /// response. Deliberately an event rather than acting in the setter:
-        /// XmlSerializer also calls this setter while ConfigStorage.Load is
-        /// deserializing the saved config, before the plugin is initialized,
-        /// and nothing should start from inside a config load. Nobody is
-        /// subscribed yet at that point, so it's a no-op there.
-        /// </summary>
-        public static event Action<bool> HostLocallyChanged;
-
-        [Checkbox(label: "Host Locally", description: "Runs your own private copy of the GPS Vault web server on this PC " +
-                                                    "(http://localhost:4040), no Discord bot needed. Downloads the latest " +
-                                                    "server from GitHub, starts with the game and stops when it closes. " +
-                                                    "Adds a \"Local (this PC)\" host profile to sync with it — pick it " +
-                                                    "above, then turn sync on with /vault sync.")]
-        [RenderAfter("OpenRepoLink")]
-        public bool HostLocally
-        {
-            get => hostLocally;
-            set
-            {
-                if (!SetField(ref hostLocally, value))
-                    return;
-                HostLocallyChanged?.Invoke(value);
-            }
-        }
-
-        // No UI — the shared secret between the plugin and its local server
-        // (passed to the server process via an environment variable). Made
-        // once, then kept, so the "Local (this PC)" profile's token stays
-        // valid across restarts.
-        public string LocalHostToken
-        {
-            get => localHostToken;
-            set => localHostToken = value ?? "";
-        }
-
-        /// <summary>
-        /// Creates (or refreshes) the "Local (this PC)" host profile pointing
-        /// at LocalServerHost, generating LocalHostToken first if needed.
-        /// Returns the token. Game thread.
-        /// </summary>
-        public string EnsureLocalProfile()
-        {
-            if (string.IsNullOrEmpty(localHostToken))
-            {
-                var bytes = new byte[24];
-                using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-                    rng.GetBytes(bytes);
-                localHostToken = Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-            }
-
-            var profile = profiles.FirstOrDefault(p => p.Endpoint == LocalServerHost.Endpoint);
-            if (profile == null)
-            {
-                profile = new SyncProfile { Id = Guid.NewGuid().ToString("N"), Nickname = "Local (this PC)", Endpoint = LocalServerHost.Endpoint };
-                profiles.Add(profile);
-            }
-            profile.Token = localHostToken;
-            profile.ChannelId = "";
-            return localHostToken;
         }
 
         #endregion

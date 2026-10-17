@@ -816,11 +816,21 @@ def make_app(db_module):
                 continue
             vectors.append(db_module.Vector3D(name, x, y, z, color))
 
-        # Always prune, even with zero vectors — a player deleting their last
-        # in-game GPS point is a legitimate "I have none" push and should
-        # clear the vault too, not be silently ignored.
+        # Only the names the client explicitly reports as deleted (vault
+        # points it had synced and the player has since removed in-game) get
+        # trashed — never "whatever's missing from points", which let a
+        # player who hadn't pulled yet (e.g. right after joining) trash
+        # everything other players added meanwhile. Older plugin builds
+        # don't send "deleted" at all: their pushes are upsert-only, so their
+        # in-game deletions stop reaching the vault (delete in Discord or on
+        # the map instead) rather than risking that data loss.
+        deleted_raw = body.get("deleted") or []
+        if not isinstance(deleted_raw, list):
+            return _bad_request("'deleted' must be a list")
+        deleted_names = [str(n)[:32] for n in deleted_raw if n is not None]
+
         deleted = await asyncio.to_thread(
-            db_module.upsert_and_prune_gps_points, guild_id, channel_id, vectors
+            db_module.upsert_and_trash_gps_points, guild_id, channel_id, vectors, deleted_names
         )
 
         return web.json_response({"upserted": len(vectors), "deleted": deleted, "errors": errors})

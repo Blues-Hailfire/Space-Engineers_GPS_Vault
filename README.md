@@ -123,10 +123,36 @@ Lists active sync tokens for the current channel (label and creation date only �
 There are two variants of the client plugin, both loaded by [Pulsar](https://github.com/SpaceGT/Pulsar) — Pulsar itself is not bundled here, it's a prerequisite you install separately. Once loaded, either one periodically reads your in-game GPS list and character position via the official Space Engineers Mod API and pushes them to the bot's sync API, so they show up via `/search_gps` and `/map` without manual copy-pasting. Live position is synced as a single point per player (named `◆ PlayerName`) that updates in place rather than accumulating history.
 
 - **[`EventHorizon_Plugin/`](EventHorizon_Plugin/)** — in-game name **GPS Vault - Mindrazer**. The base plugin described below.
-- **[`Pulsar_Plugin/`](Pulsar_Plugin/)** — in-game name **GPS Vault - Datalink**. Same base plugin, plus three differences:
-  - After an hour with no keyboard/mouse/joystick input, it prints "Player AFK Vault-Sync Deactivated!" to chat and pauses every sync path (GPS, position, planets, ore pulls) until input resumes.
+- **[`Pulsar_Plugin/`](Pulsar_Plugin/)** — in-game name **GPS Vault - Datalink**. Same base plugin, with these differences:
+  - It syncs less: no planets, asteroids, WeaponCore combat data (ship DPS, incoming missiles, threat ratings) or weapon-lock targets are read or sent. It also has no "Host Locally" option; it only talks to a server you point it at (see [Datalink networking](#datalink-networking) below).
+  - After an hour with no keyboard/mouse/joystick input, it prints "Player AFK Vault-Sync Deactivated!" to chat and pauses automatic sync (GPS, position, ore pulls) until input resumes.
   - Signals (antenna/sensor contacts) and your own ore-detector deposits are never pushed automatically — only when you run `/vault capture`, which sends whatever is on your HUD at that moment, once. Other players' ore deposits are still pulled down automatically.
   - Neutral/enemy contacts are reported at a randomized point within an uncertainty radius of their true position instead of their exact location — 10m at 1km, 1km at 10km, 10km at 100km, 100km at 1000km — rather than the exact spot. That radius is only ever reported rounded up to a power-of-two bucket (e.g. 16m at 1km, 1024m at 10km). The offset is rolled once per contact per bucket and reused while the contact stays in that bucket (or returns to it), and only the bucket radius is reported, never the actual offset, so repeated reads can't be averaged or solved back to the truth. Allied/owned/unidentified contacts, and your own GPS/position, are unaffected.
+  - Its log is written to `%AppData%\SpaceEngineers\Storage\GpsSyncPluginPulsar\gps-sync.log`, next to its config, not to the game's install folder.
+
+#### Datalink networking
+
+The Datalink plugin makes HTTP(S) requests only to the **Endpoint** URL of your active host profile (the GPS Vault bot's sync API, e.g. `https://your-server:4040`). It contacts no other server: no telemetry, no update checks, no downloads. Every request carries the profile's sync token (`Authorization: Bearer <token>`) and channel ID (`X-Channel-Id`), with a 10-second timeout; request bodies over 32 KB are gzip-compressed. Use an `https://` endpoint, since plain `http://` sends the token unencrypted.
+
+Automatic traffic runs only while sync is on for the current world + host profile (off by default in every world) and you're not AFK:
+
+| Request | When | Data |
+|---|---|---|
+| `POST /sync/gps` | After an in-game GPS edit, and on joining a world, turning sync on or returning from AFK (pulls first) | Your GPS list (name, coordinates, color) and the names of vault points you deleted in-game |
+| `GET /sync/gps` | Every 30 s by default (GPS interval setting) | The vault's GPS list, merged into your in-game list |
+| `POST /sync/position` | Every 5 s by default (position interval setting) | Player name, position, velocity, acceleration, local gravity, ship rotation |
+| `GET /sync/ores` | Every 30 s | The channel's shared ore deposits, added as hidden `[ORE]` GPS points |
+
+On demand only:
+
+| Request | When | Data |
+|---|---|---|
+| `POST /sync/hostiles` | `/vault capture` | Signals on your HUD (neutral/enemy positions fuzzed, see above) |
+| `POST /sync/ores` | `/vault capture` | Your ore-detector deposits |
+| `GET /sync/players` | Every 5 s while `/vault players` is on | Other players' current positions |
+| `GET /sync/whoami` | **Test Connection** in the settings dialog | The Discord server/channel name for that profile |
+
+The **Bring Your Own Bot** button in the settings dialog opens the bot's GitHub repo in your browser; the plugin itself makes no request there.
 
 **Setup** (pick one plugin folder and its manifest below — steps are identical either way):
 1. On the bot side, `/bind` a channel and run `/create_sync_token` to get an endpoint + token.
@@ -136,7 +162,7 @@ There are two variants of the client plugin, both loaded by [Pulsar](https://git
 > Each manifest (`Plugins/GpsSyncPlugin.xml`, `Plugins/GpsSyncPluginPulsar.xml`, and each plugin folder's own copy) pins a specific commit (`Commit`) — after pushing changes to that plugin's folder, update its `Commit` field(s) to the new commit hash so Pulsar picks up the change. The two plugins share this one repo, so `SourceDirectories` in each manifest is what keeps Pulsar building only that plugin's own folder.
 
 **Sync directions:**
-- **Game → Discord**: your in-game GPS list and live position (with velocity) push up periodically, and *replace* the vault's copy of your GPS list — so deleting a GPS point in-game deletes it from the vault too. (With more than one player actively syncing the same channel, each push is treated as that player's full authoritative list — a point one player still has locally can briefly reappear if their next push lands right after another player deletes it. Fine for one active syncer per channel.) Live position syncs as a single point per player (named `◆ PlayerName`) that updates in place, plus a rolling 6-hour position history used for the web map's movement trail.
+- **Game → Discord**: your in-game GPS list and live position (with velocity) push up to the vault, and deleting a vault GPS point in-game moves it to the vault's trash too. Only points you actually had and then deleted are trashed — a push never removes points other players added that you haven't pulled yet — and when you join a world, turn sync on, or return from being AFK, the plugin pulls the vault first, then pushes. A trashed point stays trashed (a player who still has it locally can't bring it back) until `/empty_trash` erases it. Live position syncs as a single point per player (named `◆ PlayerName`) that updates in place, plus a rolling 6-hour position history used for the web map's movement trail.
 - **Discord/vault → Game**: any point in the vault (added via `/add_gps`, or synced from another player) gets added to your in-game GPS list too — hidden from the HUD by default, since the vault can hold far more points than are useful cluttering it at once. Vault deletions never propagate down automatically. Use these in-game chat commands to browse and reveal them:
   - `/vault search [text]` (aliases `/vs`, `/VS`) — lists your current GPS points (optionally filtered by name), nearest first, e.g.:
     ```
@@ -176,13 +202,13 @@ bot_config.py             # Loads bot_config.json (see below); shared by all thr
 bot_config.json           # Bot token, sync API host/port, Discord OAuth creds — one file, not committed
 session_secret.key        # Auto-generated cookie-signing key (not committed)
 EventHorizon_Plugin/     # Space Engineers client plugin (loaded by Pulsar) — "GPS Vault - Mindrazer"
-Pulsar_Plugin/           # Same plugin, plus an AFK comms cutoff and fuzzed neutral/enemy contacts — "GPS Vault - Datalink"
+Pulsar_Plugin/           # Leaner variant: capture-only signal/ore sends, AFK comms cutoff, fuzzed neutral/enemy contacts — "GPS Vault - Datalink"
 Plugins/                 # Root-level Pulsar PluginData manifests (repo, source dir, pinned commit) for both above
 EventHorizon_Plugin/GpsSyncPlugin.xml, Pulsar_Plugin/DatalinkPlugin.xml # Per-plugin copy of its own manifest
 *_Plugin/Settings/       # In-game settings dialog (Pulsar's "Configure" button)
 *_Plugin/ChatCommands.cs # In-game /vault search, /vault confirm (and /vs, /vc) commands
 templates/map.html      # Interactive 3D map template (Three.js) — shared by the live web map and the Discord /map command
-local_server.py          # Standalone web server for the Datalink plugin's "Host Locally" option (built into an exe by .github/workflows)
+local_server.py          # Standalone web server (built into an exe by .github/workflows); formerly started by Datalink's removed "Host Locally" option
 setup.py                # Installer: venv + dependencies + bot_config.json, optional Linux systemd service
 VaultDatabase.db          # SQLite database (auto-created on first run)
 ```

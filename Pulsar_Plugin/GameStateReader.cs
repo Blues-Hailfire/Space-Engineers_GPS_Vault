@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Sandbox.Game.Entities;
-using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Gui;
 using Sandbox.Game.Multiplayer;
 using Sandbox.ModAPI;
@@ -106,77 +105,6 @@ namespace GpsSyncPlugin
                 }
                 return string.IsNullOrWhiteSpace(MyAPIGateway.Session.Name) ? "(unnamed world)" : MyAPIGateway.Session.Name;
             }
-        }
-
-        /// <summary>
-        /// Planets in the current world. There's no Mod-API-safe "IMyPlanet"
-        /// interface, but client plugins are full-trust (unlike PB scripts),
-        /// so the concrete internal MyPlanet class is used directly to get
-        /// its real radius — voxel maps in general (IMyVoxelBase, which also
-        /// covers asteroids) only expose a bounding corner, not a center/size.
-        /// </summary>
-        public static List<PlanetDto> ReadPlanets()
-        {
-            var result = new List<PlanetDto>();
-            if (!IsSessionReady)
-                return result;
-
-            var voxels = new List<IMyVoxelBase>();
-            MyAPIGateway.Session.VoxelMaps.GetInstances(voxels, v => v is MyPlanet);
-
-            foreach (var voxel in voxels)
-            {
-                if (!(voxel is MyPlanet planet))
-                    continue;
-                var pos = voxel.GetPosition();
-                result.Add(new PlanetDto
-                {
-                    name = planet.StorageName,
-                    x = pos.X,
-                    y = pos.Y,
-                    z = pos.Z,
-                    radius = planet.AverageRadius,
-                });
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Asteroids in the current world — every voxel map that ISN'T a
-        /// planet. Unlike MyPlanet, there's no precise physical radius for an
-        /// irregular asteroid, so this reports a bounding-sphere approximation:
-        /// the average of the voxel storage's three half-extents (SizeInMetresHalf)
-        /// — a decent "typical size" middle ground between an oblong asteroid's
-        /// longest axis (which would overstate a wireframe sphere drawn around
-        /// its short axes) and its shortest.
-        /// </summary>
-        public static List<AsteroidDto> ReadAsteroids()
-        {
-            var result = new List<AsteroidDto>();
-            if (!IsSessionReady)
-                return result;
-
-            var voxels = new List<IMyVoxelBase>();
-            MyAPIGateway.Session.VoxelMaps.GetInstances(voxels, v => v is MyVoxelMap);
-
-            foreach (var voxel in voxels)
-            {
-                if (!(voxel is MyVoxelBase asteroid))
-                    continue;
-                var pos = voxel.GetPosition();
-                var half = asteroid.SizeInMetresHalf;
-                result.Add(new AsteroidDto
-                {
-                    name = asteroid.StorageName,
-                    x = pos.X,
-                    y = pos.Y,
-                    z = pos.Z,
-                    radius = (half.X + half.Y + half.Z) / 3.0,
-                });
-            }
-
-            return result;
         }
 
         /// <summary>
@@ -354,21 +282,13 @@ namespace GpsSyncPlugin
             foreach (var s in SpectrumBridge.ReadSignals(reportedSignalIds))
                 AddFuzzed(s);
 
-            // WeaponCore threat list, if that mod is loaded — tags signals
-            // already reported with a threat rating, and adds any threat the
-            // other sources missed.
-            foreach (var s in WeaponCoreBridge.MergeThreats(result, reportedSignalIds))
-                AddFuzzed(s);
-
             // Drop fuzz state for signals no longer visible, so the cache
             // doesn't grow unbounded over a long session full of transient
             // contacts.
             if (signalFuzzByBucket.Count > 0)
             {
-                // The current weapon-lock target keeps its fuzz too even when it
-                // isn't a reported signal, or it'd be re-rolled every sync.
                 var stale = signalFuzzByBucket.Keys
-                    .Where(k => !reportedSignalIds.Contains(k.SignalId) && k.SignalId != lockFuzzId)
+                    .Where(k => !reportedSignalIds.Contains(k.SignalId))
                     .ToList();
                 foreach (var key in stale)
                     signalFuzzByBucket.Remove(key);
@@ -382,7 +302,6 @@ namespace GpsSyncPlugin
         private static readonly Dictionary<(long SignalId, int Bucket), Vector3D> signalFuzzByBucket =
             new Dictionary<(long SignalId, int Bucket), Vector3D>();
         private static readonly Random fuzzRandom = new Random();
-        private static long lockFuzzId;
 
         /// <summary>
         /// Reports a neutral/enemy signal at a random point within an
@@ -461,49 +380,6 @@ namespace GpsSyncPlugin
         /// lets sync be event-driven for pushes instead of only polling.
         /// </summary>
         public static event Action LocalGpsChanged;
-
-        /// <summary>
-        /// Raised (on the game thread) when a non-planet voxel map — an
-        /// asteroid — is added to the world (streamed in as the player
-        /// approaches), and once when the subscription is first established
-        /// for a session to cover asteroids that were already loaded. Lets
-        /// asteroid sync be event-driven instead of polling.
-        /// </summary>
-        public static event Action AsteroidsChanged;
-
-        private static object subscribedAsteroidSession;
-
-        /// <summary>
-        /// Subscribes to entity-added events for the current session, once
-        /// per session. Cheap no-op otherwise — called from Plugin.Update()
-        /// like EnsureGpsSubscription.
-        /// </summary>
-        public static void EnsureAsteroidSubscription()
-        {
-            var session = MyAPIGateway.Session;
-            var entities = MyAPIGateway.Entities;
-            if (session == null || entities == null || ReferenceEquals(session, subscribedAsteroidSession))
-                return;
-
-            entities.OnEntityAdd -= OnEntityAdded; // no-op if not subscribed; avoids doubling up across sessions
-            entities.OnEntityAdd += OnEntityAdded;
-            subscribedAsteroidSession = session;
-            AsteroidsChanged?.Invoke();
-        }
-
-        public static void ShutdownAsteroidSubscription()
-        {
-            var entities = MyAPIGateway.Entities;
-            if (entities != null)
-                entities.OnEntityAdd -= OnEntityAdded;
-            subscribedAsteroidSession = null;
-        }
-
-        private static void OnEntityAdded(IMyEntity entity)
-        {
-            if (entity is MyVoxelMap)
-                AsteroidsChanged?.Invoke();
-        }
 
         // The MyGpsCollection instance currently subscribed to. A new one is
         // created per session (MySession.Static.Gpss), so EnsureGpsSubscription
@@ -653,8 +529,89 @@ namespace GpsSyncPlugin
         // from "the player just deleted this" — both look like "missing
         // locally" — and would keep resurrecting anything the player deletes,
         // since the vault still has it until the *next* push reports it gone.
-        // Session-lifetime only (not persisted): resets on plugin/game restart.
+        // Not persisted, and cleared whenever the world/profile/channel
+        // changes (ResetVaultTracking). Game thread only.
         private static readonly HashSet<string> knownVaultNames = new HashSet<string>();
+
+        // The subset of vault names actually observed in the local GPS list
+        // (found there by ApplyRemoteGpsList, or read from it for a push the
+        // server accepted) — the only names a push may report as deleted
+        // (ReadDeletedVaultNames). Kept apart from knownVaultNames because a
+        // point ApplyRemoteGpsList just AddGps'd may not be in the local list
+        // yet (in multiplayer it can take a server round-trip to appear);
+        // reporting those as "missing" would trash every point just pulled.
+        // Same lifetime as knownVaultNames. Game thread only.
+        private static readonly HashSet<string> deletableVaultNames = new HashSet<string>();
+
+        // Bumped by ResetVaultTracking, so a push still in flight from the
+        // previous world/channel can't record its names into the new one's
+        // knownVaultNames (see RecordGpsPush).
+        public static int VaultTrackingGeneration { get; private set; }
+
+        /// <summary>
+        /// Forgets every known vault name. Called when the world, host
+        /// profile or channel changes. Must run on the game thread.
+        /// </summary>
+        public static void ResetVaultTracking()
+        {
+            knownVaultNames.Clear();
+            deletableVaultNames.Clear();
+            VaultTrackingGeneration++;
+        }
+
+        /// <summary>
+        /// Vault points this player was seen to have (deletableVaultNames) that
+        /// are no longer anywhere in their local GPS list — i.e. ones they deleted
+        /// (or renamed) in-game. Checked against the full, unfiltered local
+        /// list, not ReadGpsList's: a vault point that's merely excluded from
+        /// pushes (a "[P]"/"[VP]"/ore name) is still there, not deleted. Must
+        /// run on the game thread.
+        /// </summary>
+        public static List<string> ReadDeletedVaultNames()
+        {
+            var result = new List<string>();
+            if (!IsSessionReady || deletableVaultNames.Count == 0)
+                return result;
+
+            var localList = new List<IMyGps>();
+            MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Session.Player.IdentityId, localList);
+            var localNames = new HashSet<string>(localList.Where(g => g.Name != null).Select(g => g.Name));
+
+            foreach (var name in deletableVaultNames)
+            {
+                if (!localNames.Contains(name))
+                    result.Add(name);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Records a push the server accepted: its points are now in the vault
+        /// (so deleting one later is a real deletion to report), and its
+        /// reported deletions are done — forgetting them means a point
+        /// re-added to the vault later (e.g. after /empty_trash) is pulled in as new
+        /// instead of being re-trashed by every later push. Ignored if
+        /// tracking was reset since the push was read. Must run on the game
+        /// thread.
+        /// </summary>
+        public static void RecordGpsPush(int trackingGeneration, List<GpsPointDto> pushed, List<string> deleted)
+        {
+            if (trackingGeneration != VaultTrackingGeneration)
+                return;
+
+            foreach (var p in pushed)
+            {
+                if (string.IsNullOrEmpty(p.name))
+                    continue;
+                knownVaultNames.Add(p.name);
+                deletableVaultNames.Add(p.name);
+            }
+            foreach (var name in deleted)
+            {
+                knownVaultNames.Remove(name);
+                deletableVaultNames.Remove(name);
+            }
+        }
 
         /// <summary>
         /// Merges the vault's GPS list (points added/edited in Discord, or by
@@ -663,8 +620,9 @@ namespace GpsSyncPlugin
         /// AddGps/ModifyGps calls, so they persist and show up for the player
         /// like any other GPS entry. A vault point the player deletes locally
         /// is recognized (via knownVaultNames) and left deleted rather than
-        /// re-added — the next GPS push then reports it missing, which is what
-        /// makes the bot delete it from the vault too.
+        /// re-added — the next GPS push then reports it deleted (see
+        /// ReadDeletedVaultNames), which is what makes the bot trash it in
+        /// the vault too.
         /// </summary>
         public static void ApplyRemoteGpsList(List<GpsPointDto> remotePoints)
         {
@@ -687,6 +645,7 @@ namespace GpsSyncPlugin
                 if (byName.TryGetValue(rp.name, out var existing))
                 {
                     knownVaultNames.Add(rp.name);
+                    deletableVaultNames.Add(rp.name);
                     bool coordsChanged = Vector3D.DistanceSquared(existing.Coords, coords) > 0.25;
                     bool colorChanged = existing.GPSColor.PackedValue != color.PackedValue;
                     if (coordsChanged || colorChanged)
@@ -784,70 +743,7 @@ namespace GpsSyncPlugin
                 wz = angular.Z,
             };
 
-            request.combat = WeaponCoreBridge.ReadCombatState();
-            ReadWeaponLock(request);
             return request;
-        }
-
-        /// <summary>
-        /// Fills in the weapon-lock fields on an already-built
-        /// PositionSyncRequest, if the local player currently has a lock —
-        /// MyTargetLockingComponent only exists/does anything while wielding
-        /// or piloting a lock-capable weapon (e.g. the rocket launcher), so
-        /// this is a no-op (weapon_locked stays false) the rest of the time.
-        /// This is about the player's OWN lock on something else — nothing
-        /// tracks or exposes whether someone else has locked onto the player.
-        /// </summary>
-        private static void ReadWeaponLock(PositionSyncRequest request)
-        {
-            VRage.Game.Entity.MyEntity target = null;
-            double lockDistance = 0;
-
-            var lockComp = (MyAPIGateway.Session.Player.Character as MyCharacter)?.TargetLockingComp;
-            if (lockComp != null && lockComp.IsTargetLocked && lockComp.TargetEntity != null)
-            {
-                target = lockComp.TargetEntity;
-                lockDistance = lockComp.DistanceToLockedTarget;
-            }
-            else
-            {
-                // WeaponCore worlds don't use the vanilla lock at all — its
-                // focus target is the equivalent. Null without WeaponCore.
-                target = WeaponCoreBridge.GetFocusTarget();
-                if (target != null)
-                    lockDistance = Vector3D.Distance(target.PositionComp.GetPosition(), MyAPIGateway.Session.Player.GetPosition());
-            }
-            lockFuzzId = 0;
-            if (target == null)
-                return;
-
-            var targetPos = target.PositionComp.GetPosition();
-
-            // Same fuzz as a neutral/enemy contact reported via
-            // ReadHostileSignals — a weapon lock must not leak the exact
-            // position the HUD signal itself is hiding. Keyed by the same
-            // entity id as that grid's hostile-signal fuzz, so locking onto a
-            // contact reports a position consistent with its map marker
-            // rather than a second, independently-fuzzed one.
-            var grid = (target as IMyCubeBlock)?.CubeGrid ?? target as IMyCubeGrid;
-            var ownerId = grid?.BigOwners != null && grid.BigOwners.Count > 0 ? grid.BigOwners[0] : 0L;
-            var relation = MyIDModule.GetRelationPlayerBlock(ownerId, MyAPIGateway.Session.Player.IdentityId, MyOwnershipShareModeEnum.None);
-            if (relation == MyRelationsBetweenPlayerAndBlock.Neutral || relation == MyRelationsBetweenPlayerAndBlock.Enemies)
-            {
-                var distance = Vector3D.Distance(targetPos, MyAPIGateway.Session.Player.Character.GetPosition());
-                lockFuzzId = grid?.EntityId ?? target.EntityId;
-                targetPos = FuzzSignalPosition(lockFuzzId, targetPos, distance, out _);
-                // The true distance would let repeated reports from a moving
-                // player triangulate the real position.
-                lockDistance = Vector3D.Distance(targetPos, MyAPIGateway.Session.Player.Character.GetPosition());
-            }
-
-            request.weapon_locked = true;
-            request.lock_target_name = string.IsNullOrWhiteSpace(target.DisplayName) ? "Unknown Target" : target.DisplayName;
-            request.lock_target_x = targetPos.X;
-            request.lock_target_y = targetPos.Y;
-            request.lock_target_z = targetPos.Z;
-            request.lock_distance = lockDistance;
         }
 
         private static string ToArgbHex(Color c) =>

@@ -7,7 +7,7 @@ namespace GpsSyncPlugin
     /// <summary>
     /// Bridges a background (Task.Run) thread onto the game thread for a single
     /// synchronous read/write, then back. Needed because ModAPI collections
-    /// (GPS list, voxel maps, HUD markers) are mutated by the simulation thread
+    /// (GPS list, HUD markers) are mutated by the simulation thread
     /// and aren't safe to walk from a background thread directly.
     /// </summary>
     public static class GameThread

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using VRage.FileSystem;
 
 namespace GpsSyncPlugin
 {
@@ -21,7 +22,10 @@ namespace GpsSyncPlugin
 
         public static void Init()
         {
-            var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Plugins", "GpsSyncPluginPulsar");
+            // Under the user's SE data folder (next to the config — see
+            // ConfigStorage), not the game's install folder, which may not be
+            // writable.
+            var dir = Path.Combine(MyFileSystem.UserDataPath, "Storage", Plugin.Name);
             if (!Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
             Instance = new Log(Path.Combine(dir, "gps-sync.log"));

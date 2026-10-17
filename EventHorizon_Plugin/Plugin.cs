@@ -41,6 +41,10 @@ namespace GpsSyncPlugin
         // a single push instead of one per event.
         private const int GpsPushDebounceMs = 800;
 
+        // How long to wait before retrying a pull-then-push (see
+        // RequestGpsPullThenPush) whose pull failed.
+        private const int GpsPullRetryMs = 5000;
+
         private SettingsGenerator settingsGenerator;
         private Timer gpsTimer;
         private Timer positionTimer;
@@ -62,11 +66,13 @@ namespace GpsSyncPlugin
         private volatile bool shapesSyncing;
         private volatile bool hostilesSyncing;
         private DateTime lastLocalGpsEditUtc = DateTime.MinValue;
+        // Set by RequestGpsPullThenPush; the next push applies a pull first.
+        private volatile bool pullBeforeNextGpsPush;
 
         // Tracks what CheckForGpsPushTriggers last saw, to detect "just joined
-        // this world" / "sync just turned on for this world+profile" edge
-        // transitions — see that method.
-        private string lastSeenWorldKey;
+        // this world (or switched profile/channel)" / "sync just turned on for
+        // this world+profile" edge transitions — see that method.
+        private string lastSeenSyncScopeKey;
         private bool lastSeenSyncEnabled;
 
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -217,6 +223,18 @@ namespace GpsSyncPlugin
             gpsPushDebounceTimer?.Change(GpsPushDebounceMs, Timeout.Infinite);
         }
 
+        /// <summary>
+        /// Schedules a push that first pulls and applies the vault's current
+        /// list (see OnGpsPushDebounceElapsed). For the pushes not caused by a
+        /// local edit — joining a world, sync turning on, returning from AFK —
+        /// where the local list may be long out of date.
+        /// </summary>
+        private void RequestGpsPullThenPush()
+        {
+            pullBeforeNextGpsPush = true;
+            gpsPushDebounceTimer?.Change(GpsPushDebounceMs, Timeout.Infinite);
+        }
+
         private void OnGpsPushDebounceElapsed(object state)
         {
             if (gpsSyncing || !GameStateReader.IsSessionReady || !Config.Current.SyncEnabled)
@@ -232,10 +250,54 @@ namespace GpsSyncPlugin
             {
                 try
                 {
-                    List<GpsPointDto> points;
+                    // After a join / sync-enable / AFK return the local list
+                    // may be stale, so apply the vault's current state first —
+                    // otherwise this push would overwrite coords/colors that
+                    // Discord or other players changed meanwhile with the old
+                    // local copy. Not done for edit-triggered pushes: applying
+                    // a pull there would clobber the very edit being pushed
+                    // (see LocalGpsEditGracePeriod).
+                    if (pullBeforeNextGpsPush)
+                    {
+                        var remotePoints = await SyncClient.Shared.FetchGpsAsync();
+                        if (remotePoints == null)
+                        {
+                            gpsPushDebounceTimer?.Change(GpsPullRetryMs, Timeout.Infinite);
+                            return;
+                        }
+
+                        try
+                        {
+                            await GameThread.RunAsync(() =>
+                            {
+                                GameStateReader.ApplyRemoteGpsList(remotePoints);
+                                return true;
+                            });
+                        }
+                        catch (TimeoutException)
+                        {
+                            Log.Instance?.Warn("GPS pull-then-push: game thread hop timed out, retrying.");
+                            gpsPushDebounceTimer?.Change(GpsPullRetryMs, Timeout.Infinite);
+                            return;
+                        }
+                        pullBeforeNextGpsPush = false;
+                    }
+
+                    GpsSyncRequest request;
+                    var trackingGeneration = 0;
                     try
                     {
-                        points = await GameThread.RunAsync(GameStateReader.ReadGpsList);
+                        // One hop, so the points and the deletions come from
+                        // the same snapshot of the local list.
+                        request = await GameThread.RunAsync(() =>
+                        {
+                            trackingGeneration = GameStateReader.VaultTrackingGeneration;
+                            return new GpsSyncRequest
+                            {
+                                points = GameStateReader.ReadGpsList(),
+                                deleted = GameStateReader.ReadDeletedVaultNames(),
+                            };
+                        });
                     }
                     catch (TimeoutException)
                     {
@@ -243,11 +305,27 @@ namespace GpsSyncPlugin
                         return;
                     }
 
-                    // Push even when empty — an in-game deletion needs to reach
-                    // the server too (see ApplyRemoteGpsList/ReadGpsList: the
-                    // server treats a push as this player's full authoritative
-                    // list and deletes vault points missing from it).
-                    await SyncClient.Shared.SyncGpsAsync(new GpsSyncRequest { points = points });
+                    // The server trashes only the names in `deleted` (vault
+                    // points this player had and has since removed in-game),
+                    // never "whatever's missing from points" — which would
+                    // trash points other players added that this player just
+                    // hasn't pulled yet.
+                    if (!await SyncClient.Shared.SyncGpsAsync(request))
+                        return;
+
+                    try
+                    {
+                        await GameThread.RunAsync(() =>
+                        {
+                            GameStateReader.RecordGpsPush(trackingGeneration, request.points, request.deleted);
+                            return true;
+                        });
+                    }
+                    catch (TimeoutException)
+                    {
+                        // Harmless: the next successful push records it again.
+                        Log.Instance?.Warn("GPS push: game thread hop timed out recording the push.");
+                    }
                 }
                 catch (Exception e)
                 {
@@ -597,8 +675,9 @@ namespace GpsSyncPlugin
         }
 
         /// <summary>
-        /// Fires an immediate GPS push (same path as a real in-game edit — see
-        /// OnLocalGpsChanged) the moment a world/server connects, or the moment
+        /// Fires an immediate pull-then-push (see RequestGpsPullThenPush) the
+        /// moment a world/server connects (or the host profile/channel
+        /// changes), or the moment
         /// sync becomes active for the current world+profile — whichever the
         /// player didn't already have. Needed because the local player's own
         /// GPS list doesn't raise the game's GpsChanged/GpsAdded/ListChanged
@@ -615,22 +694,30 @@ namespace GpsSyncPlugin
             {
                 // Reset so returning to a world (the same one or a different one)
                 // is treated as a fresh join and re-triggers below.
-                lastSeenWorldKey = null;
+                lastSeenSyncScopeKey = null;
                 lastSeenSyncEnabled = false;
                 return;
             }
 
-            var worldKey = GameStateReader.CurrentWorldKey;
-            var syncEnabled = Config.Current.SyncEnabled;
+            // Everything that decides which vault channel this player syncs
+            // with: a change means the known vault names belong to another
+            // channel and must not be reported as deletions to this one.
+            var config = Config.Current;
+            var syncScopeKey = GameStateReader.CurrentWorldKey + "|" + config.ActiveProfileId + "|"
+                               + config.ActiveEndpoint + "|" + config.ActiveChannelId;
+            var syncEnabled = config.SyncEnabled;
 
-            var justJoinedWorld = worldKey != lastSeenWorldKey;
+            var syncScopeChanged = syncScopeKey != lastSeenSyncScopeKey;
             var syncJustEnabled = syncEnabled && !lastSeenSyncEnabled;
 
-            lastSeenWorldKey = worldKey;
+            lastSeenSyncScopeKey = syncScopeKey;
             lastSeenSyncEnabled = syncEnabled;
 
-            if (syncEnabled && (justJoinedWorld || syncJustEnabled))
-                OnLocalGpsChanged();
+            if (syncScopeChanged)
+                GameStateReader.ResetVaultTracking();
+
+            if (syncEnabled && (syncScopeChanged || syncJustEnabled))
+                RequestGpsPullThenPush();
         }
     }
 }

@@ -44,9 +44,10 @@ namespace GpsSyncPlugin
                 requestMessage.Headers.Add("X-Channel-Id", trimmedChannelId);
         }
 
-        public async Task SyncGpsAsync(GpsSyncRequest request)
+        /// <summary>True if the server accepted the push.</summary>
+        public async Task<bool> SyncGpsAsync(GpsSyncRequest request)
         {
-            await PostAsync("/sync/gps", request);
+            return await PostAsync("/sync/gps", request);
         }
 
         public async Task SyncPositionAsync(PositionSyncRequest request)
@@ -258,7 +259,7 @@ namespace GpsSyncPlugin
             }
         }
 
-        private async Task PostAsync(string path, object body)
+        private async Task<bool> PostAsync(string path, object body)
         {
             try
             {
@@ -295,13 +296,16 @@ namespace GpsSyncPlugin
                         {
                             var text = await response.Content.ReadAsStringAsync();
                             Log.Instance?.Warn($"Sync POST {path} failed: {(int)response.StatusCode} {text}");
+                            return false;
                         }
+                        return true;
                     }
                 }
             }
             catch (Exception e)
             {
                 Log.Instance?.Warn($"Sync POST {path} error: {e.Message}");
+                return false;
             }
         }
     }

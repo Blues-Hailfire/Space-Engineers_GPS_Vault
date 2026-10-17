@@ -14,6 +14,10 @@ namespace GpsSyncPlugin
     public class GpsSyncRequest
     {
         public List<GpsPointDto> points;
+        // Push only: vault names this player had synced and has since deleted
+        // in-game — the only points the server trashes (see
+        // GameStateReader.ReadDeletedVaultNames). Absent on a pull response.
+        public List<string> deleted;
     }
 
     public class PositionSyncRequest
@@ -40,76 +44,6 @@ namespace GpsSyncPlugin
         public double wx;
         public double wy;
         public double wz;
-
-        // Weapon lock (MyTargetLockingComponent — a lock-capable weapon like
-        // the rocket launcher, not general "is anyone locked onto me").
-        // lock_target_* / lock_distance are only meaningful when
-        // weapon_locked is true.
-        public bool weapon_locked;
-        public string lock_target_name;
-        public double lock_target_x;
-        public double lock_target_y;
-        public double lock_target_z;
-        public double lock_distance;
-
-        // WeaponCore combat picture (see WeaponCoreBridge.ReadCombatState) —
-        // null when WeaponCore isn't loaded.
-        public CombatStateDto combat;
-    }
-
-    public class CombatStateDto
-    {
-        // Your ship's construct DPS — null on foot. ship_dps is WeaponCore's
-        // "effective" figure (current ammo), ship_peak_dps its optimal one.
-        public double? ship_dps;
-        public double? ship_peak_dps;
-        public int incoming_missiles;
-        public List<double[]> incoming_positions = new List<double[]>();
-        // WeaponCore's "a priority target / any target is within weapon range".
-        public bool in_range_priority;
-        public bool in_range_other;
-        // Every guided missile this client is simulating (nearby only).
-        public List<MissileDto> missiles = new List<MissileDto>();
-    }
-
-    public class MissileDto
-    {
-        public string id;
-        public double x;
-        public double y;
-        public double z;
-        public string faction_tag;
-    }
-
-    public class PlanetDto
-    {
-        public string name;
-        public double x;
-        public double y;
-        public double z;
-        public double radius;
-    }
-
-    public class PlanetSyncRequest
-    {
-        public List<PlanetDto> planets;
-    }
-
-    // Same shape as PlanetDto — radius is a bounding-sphere approximation
-    // (see GameStateReader.ReadAsteroids) rather than a precise physical
-    // radius, since asteroids are irregular voxel bodies, not spheres.
-    public class AsteroidDto
-    {
-        public string name;
-        public double x;
-        public double y;
-        public double z;
-        public double radius;
-    }
-
-    public class AsteroidSyncRequest
-    {
-        public List<AsteroidDto> asteroids;
     }
 
     // One exact clustered vein location, folded into its parent
@@ -203,9 +137,6 @@ namespace GpsSyncPlugin
         // The reporting grid's IMyCubeGrid.IsStatic — lets the map draw a
         // station icon vs. a ship icon for this signal.
         public bool is_static;
-
-        // WeaponCore threat rating from your ship's threat list, when it's on it.
-        public double? threat;
     }
 
     public class HostileSignalSyncRequest
