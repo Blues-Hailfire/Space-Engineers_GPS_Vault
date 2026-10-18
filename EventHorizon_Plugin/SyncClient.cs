@@ -60,9 +60,9 @@ namespace GpsSyncPlugin
             await PostAsync("/sync/planets", request);
         }
 
-        public async Task SyncAsteroidsAsync(AsteroidSyncRequest request)
+        public async Task<bool> SyncAsteroidsAsync(AsteroidSyncRequest request)
         {
-            await PostAsync("/sync/asteroids", request);
+            return await PostAsync("/sync/asteroids", request);
         }
 
         /// <summary>Terrain tiles the web map is waiting on. Null on any failure.</summary>

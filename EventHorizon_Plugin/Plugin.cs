@@ -556,8 +556,25 @@ namespace GpsSyncPlugin
                 try
                 {
                     var local = await GameThread.RunAsync(OreDeposits.ReadOreDeposits);
+                    // Optional Asteroid Scanner mod results — see AsteroidScannerBridge.
+                    // Empty without it.
+                    local.AddRange(await GameThread.RunAsync(AsteroidScannerBridge.ReadScannedDeposits));
                     if (local.Count > 0)
                         await SyncClient.Shared.SyncOresAsync(new OreDepositSyncRequest { deposits = local });
+
+                    // Scanned asteroids out of streaming range have no voxel map
+                    // here for the asteroid sync to find, so the map would have
+                    // nothing to attach their ore point to.
+                    var scannedAsteroids = await GameThread.RunAsync(AsteroidScannerBridge.ReadUnloadedScannedAsteroids);
+                    if (scannedAsteroids.Count > 0
+                        && await SyncClient.Shared.SyncAsteroidsAsync(new AsteroidSyncRequest { asteroids = scannedAsteroids }))
+                    {
+                        await GameThread.RunAsync(() =>
+                        {
+                            AsteroidScannerBridge.MarkAsteroidsPushed(scannedAsteroids);
+                            return true;
+                        });
+                    }
 
                     var remote = await SyncClient.Shared.FetchOresAsync();
                     if (remote != null && remote.Count > 0)
@@ -646,6 +663,7 @@ namespace GpsSyncPlugin
             ChatCommands.Dispose();
             SpectrumBridge.Unload();
             WeaponCoreBridge.Unload();
+            AsteroidScannerBridge.Unload();
             Instance = null;
         }
 
@@ -670,6 +688,7 @@ namespace GpsSyncPlugin
             // Optional Spectrum mod handshake — see SpectrumBridge. No-op without it.
             SpectrumBridge.Update();
             WeaponCoreBridge.Update();
+            AsteroidScannerBridge.Update();
 
             CheckForGpsPushTriggers();
         }

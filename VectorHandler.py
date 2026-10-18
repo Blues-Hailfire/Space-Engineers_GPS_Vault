@@ -1053,7 +1053,10 @@ def upsert_ore_deposits(guild_id, channel_id, deposits):
     """Upsert each {deposit_id, name, ores, voxel_name, is_planet, x, y, z,
     locations} by deposit_id — never more than one row per asteroid (see the
     ore_deposits table comment). `locations` is a list of {ore, x, y, z}
-    dicts, stored JSON-encoded. Never deletes."""
+    dicts, stored JSON-encoded. Never deletes. An empty `locations` never
+    overwrites stored ones: the plugin's Asteroid Scanner bridge only knows
+    an asteroid's veins in the session that detail-scanned it, and re-sends
+    the same row without them after a rejoin."""
     now = time.time()
     with db() as conn:
         for d in deposits:
@@ -1064,7 +1067,8 @@ def upsert_ore_deposits(guild_id, channel_id, deposits):
                 "ON CONFLICT (guild_id, channel_id, deposit_id) DO UPDATE SET "
                 "name = excluded.name, ores = excluded.ores, voxel_name = excluded.voxel_name, "
                 "is_planet = excluded.is_planet, "
-                "x = excluded.x, y = excluded.y, z = excluded.z, locations = excluded.locations, "
+                "x = excluded.x, y = excluded.y, z = excluded.z, "
+                "locations = CASE WHEN excluded.locations = '[]' THEN ore_deposits.locations ELSE excluded.locations END, "
                 "updated_at = excluded.updated_at",
                 (guild_id, channel_id, d["deposit_id"], d["name"], d["ores"], d["voxel_name"],
                  int(d["is_planet"]), d["x"], d["y"], d["z"], json.dumps(d.get("locations") or []), now),
