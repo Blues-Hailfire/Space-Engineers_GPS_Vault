@@ -2515,6 +2515,9 @@ function buildMeshShape(shape) {
   const mesh = new THREE.Mesh(geom, meshShapeMat);
   mesh.position.set(shape.center_x, shape.center_y, shape.center_z);
   scene.add(mesh);
+  // The real voxels replace the bounding sphere. The sphere stays in the
+  // scene undrawn, as the asteroid's click/measure raycast target.
+  if (shape._wire) shape._wire.material.visible = false;
   return mesh;
 }
 
@@ -2529,9 +2532,12 @@ for (const asteroid of ASTEROIDS) {
     color: ASTEROID_COLOR,
     wireframe: true,
     transparent: true,
-    // Faded further when the real shape is drawn on top of it — it's then
-    // just a faint "how big is this roughly" reference, not the shape itself.
-    opacity: shape ? 0.12 : 0.45,
+    // Only drawn while a known shape is still on its way (see
+    // buildMeshShape, which hides it once the real voxels are built). With
+    // no shape there's no voxel content known to be inside it, so it's
+    // never drawn - just kept as the asteroid's click/measure raycast target.
+    opacity: 0.45,
+    visible: !!shape,
     depthWrite: false,
   });
   const wireMesh = new THREE.Mesh(wireGeom, wireMat);
@@ -2539,6 +2545,7 @@ for (const asteroid of ASTEROIDS) {
   wireMesh.userData = asteroid;
   scene.add(wireMesh);
   asteroidMeshes.push(wireMesh);
+  if (shape) shape._wire = wireMesh;
 
   if (shape && shape.format === 'mesh' && shape.vertices && shape.indices) {
     buildMeshShape(shape);
@@ -2581,7 +2588,7 @@ async function loadLazyMeshes(queue) {
         shape.mesh_scale = data.mesh_scale;
         buildMeshShape(shape);
       } catch (e) {
-        // Network hiccup - this asteroid just keeps its faint bounding sphere until the next page load.
+        // Network hiccup - this asteroid just keeps its bounding sphere until the next page load.
       }
     }
   };
