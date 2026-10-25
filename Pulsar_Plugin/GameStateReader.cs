@@ -4,6 +4,7 @@ using System.Linq;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.Game.Multiplayer;
+using Sandbox.Game.Screens.Helpers;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.ModAPI;
@@ -128,7 +129,8 @@ namespace GpsSyncPlugin
         /// faction identity), so this bucket is much noisier than a real
         /// enemy-faction contact. "unidentified" is also the one category the
         /// admin toggle/color settings don't apply to — it keeps this fixed
-        /// color and its own short, fixed expiry regardless.
+        /// color and its own short, fixed expiry regardless. ReadHostileSignals
+        /// no longer sends "unidentified" signals at all (see IsDroppedSignal).
         /// </summary>
         internal static void ClassifyRelation(MyRelationsBetweenPlayerAndBlock relation, out string category, out string color)
         {
@@ -221,7 +223,11 @@ namespace GpsSyncPlugin
                 if (name.Length > 32)
                     name = name.Substring(0, 32);
 
+                // Recorded even when dropped, so Spectrum can't re-report the
+                // same grid under another name/relation.
                 reportedSignalIds.Add(signalId);
+                if (IsDroppedSignal(category, name))
+                    continue;
 
                 double? uncertaintyRadius = null;
                 if (category == "neutral" || category == "enemy")
@@ -265,6 +271,8 @@ namespace GpsSyncPlugin
             // antenna contacts above.
             void AddFuzzed(HostileSignalDto s)
             {
+                if (IsDroppedSignal(s.category, s.name))
+                    return;
                 if (s.category == "neutral" || s.category == "enemy")
                 {
                     var truePos = new Vector3D(s.x, s.y, s.z);
@@ -295,6 +303,20 @@ namespace GpsSyncPlugin
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Signals never sent to the vault: unowned ones ("unidentified" —
+        /// mostly vanilla pirate/encounter grids nobody claimed) and unknown
+        /// ones — anything named "Unknown Signal", which covers both the
+        /// fallback name given above to a contact with no name at all and the
+        /// game's own "Unknown Signal"/"Strong Unknown Signal" drop containers.
+        /// </summary>
+        private static bool IsDroppedSignal(string category, string name)
+        {
+            if (category == "unidentified")
+                return true;
+            return name != null && name.IndexOf("unknown signal", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // Per (signal, radius bucket) offset, as a vector of length 0..1 to be
@@ -460,6 +482,19 @@ namespace GpsSyncPlugin
             return lower.Contains("[p]") || lower.Contains("[private]");
         }
 
+        /// <summary>
+        /// A GPS point the game itself created and manages, rather than one
+        /// the player made: global encounter markers (MyGlobalEncountersGenerator),
+        /// container drop markers (MySessionComponentContainerDropSystem), contract
+        /// markers, and anything tracking a live entity. These come and go on
+        /// their own, so they're never synced to the vault.
+        /// </summary>
+        private static bool IsGameManagedGps(IMyGps gps)
+        {
+            return gps is MyGps g
+                && (g.EntityId != 0 || g.IsContainerGPS || g.IsGlobalEncounterGPS || g.ContractId != 0);
+        }
+
         public static List<GpsPointDto> ReadGpsList()
         {
             var result = new List<GpsPointDto>();
@@ -477,6 +512,8 @@ namespace GpsSyncPlugin
                 if (IsPrivateGpsName(gps.Name))
                     continue;
                 if (gps.Name != null && gps.Name.StartsWith(OreDeposits.OreGpsPrefix))
+                    continue;
+                if (IsGameManagedGps(gps))
                     continue;
 
                 result.Add(new GpsPointDto

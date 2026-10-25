@@ -126,8 +126,10 @@ There are two variants of the client plugin, both loaded by [Pulsar](https://git
 - **[`Pulsar_Plugin/`](Pulsar_Plugin/)** — in-game name **GPS Vault - Datalink**. Same base plugin, with these differences:
   - It syncs less: no planets, asteroids, WeaponCore combat data (ship DPS, incoming missiles, threat ratings) or weapon-lock targets are read or sent. It also has no "Host Locally" option; it only talks to a server you point it at (see [Datalink networking](#datalink-networking) below).
   - After an hour with no keyboard/mouse/joystick input, it prints "Player AFK Vault-Sync Deactivated!" to chat and pauses automatic sync (GPS, position, ore pulls) until input resumes.
+  - GPS points the game creates and manages itself are never pushed to the vault: global encounter markers, drop container ("Unknown Signal") markers, contract markers, and any GPS that tracks a live entity. They stay in your in-game list; they just aren't synced.
   - Signals (antenna/sensor contacts) and your own ore-detector deposits are never pushed automatically — only when you run `/vault capture`, which sends whatever is on your HUD at that moment, once. Other players' ore deposits are still pulled down automatically.
-  - Neutral/enemy contacts are reported at a randomized point within an uncertainty radius of their true position instead of their exact location — 10m at 1km, 1km at 10km, 10km at 100km, 100km at 1000km — rather than the exact spot. That radius is only ever reported rounded up to a power-of-two bucket (e.g. 16m at 1km, 1024m at 10km). The offset is rolled once per contact per bucket and reused while the contact stays in that bucket (or returns to it), and only the bucket radius is reported, never the actual offset, so repeated reads can't be averaged or solved back to the truth. Allied/owned/unidentified contacts, and your own GPS/position, are unaffected.
+  - `/vault capture` skips unowned contacts (mostly unclaimed pirate/encounter grids) and unknown signals — any contact named "Unknown Signal", which covers the game's "Unknown Signal"/"Strong Unknown Signal" drop containers and contacts with no name at all. This applies to Spectrum detections too. The name match is on the English text.
+  - Neutral/enemy contacts are reported at a randomized point within an uncertainty radius of their true position instead of their exact location — 10m at 1km, 1km at 10km, 10km at 100km, 100km at 1000km — rather than the exact spot. That radius is only ever reported rounded up to a power-of-two bucket (e.g. 16m at 1km, 1024m at 10km). The offset is rolled once per contact per bucket and reused while the contact stays in that bucket (or returns to it), and only the bucket radius is reported, never the actual offset, so repeated reads can't be averaged or solved back to the truth. Allied/owned contacts, and your own GPS/position, are unaffected.
   - Its log is written to `%AppData%\SpaceEngineers\Storage\GpsSyncPluginPulsar\gps-sync.log`, next to its config, not to the game's install folder.
 
 #### Datalink networking
@@ -138,7 +140,7 @@ Automatic traffic runs only while sync is on for the current world + host profil
 
 | Request | When | Data |
 |---|---|---|
-| `POST /sync/gps` | After an in-game GPS edit, and on joining a world, turning sync on or returning from AFK (pulls first) | Your GPS list (name, coordinates, color) and the names of vault points you deleted in-game |
+| `POST /sync/gps` | After an in-game GPS edit, and on joining a world, turning sync on or returning from AFK (pulls first) | Your GPS list (name, coordinates, color; game-managed markers excluded, see above) and the names of vault points you deleted in-game |
 | `GET /sync/gps` | Every 30 s by default (GPS interval setting) | The vault's GPS list, merged into your in-game list |
 | `POST /sync/position` | Every 5 s by default (position interval setting) | Player name, position, velocity, acceleration, local gravity, ship rotation |
 | `GET /sync/ores` | Every 30 s | The channel's shared ore deposits, added as hidden `[ORE]` GPS points |
@@ -147,7 +149,7 @@ On demand only:
 
 | Request | When | Data |
 |---|---|---|
-| `POST /sync/hostiles` | `/vault capture` | Signals on your HUD (neutral/enemy positions fuzzed, see above) |
+| `POST /sync/hostiles` | `/vault capture` | Signals on your HUD, minus unowned and unknown ones (neutral/enemy positions fuzzed, see above) |
 | `POST /sync/ores` | `/vault capture` | Your ore-detector deposits |
 | `GET /sync/players` | Every 5 s while `/vault players` is on | Other players' current positions |
 | `GET /sync/whoami` | **Test Connection** in the settings dialog | The Discord server/channel name for that profile |
@@ -171,7 +173,7 @@ The **Bring Your Own Bot** button in the settings dialog opens the bot's GitHub 
     ```
   - `/vault confirm <number> [-h | -hide all]` (aliases `/vc`, `/VC`) — reveals that result on the HUD and hides the other points from that same search. Add `-h` (or `-hide all`) to also hide every other GPS point you have, not just that search's results.
   - `/vault sync [on|off]` — pauses or resumes syncing for the current world/server and active sync profile (same switch as the plugin's "Sync Enabled" setting); with no argument, toggles.
-  - `/vault capture` (Datalink/Pulsar plugin only) — sends the signals and ore deposits currently on your HUD to the vault, once.
+  - `/vault capture` (Datalink/Pulsar plugin only) — sends the signals (except unowned and unknown ones) and ore deposits currently on your HUD to the vault, once.
   - `/vault host "name"` (aliases `/vh`, `/VH`) — switches the active sync profile ("host profile") to the one with that nickname; doesn't change that world's sync on/off state, since that's saved per world+profile.
   - `/vault list profiles` / `/vault list hosts` (aliases `/vlh`, `/VLH`) — lists your saved host profiles, marking the active one.
   - `/vault` / `/vault help` / `/vault -h` (aliases `/v`, `/V`) — pops up an in-game dialog listing every command above and what it does.
